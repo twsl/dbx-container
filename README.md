@@ -1,6 +1,5 @@
 # dbx-container
 
-
 [![Build](https://github.com/twsl/dbx-container/actions/workflows/build.yaml/badge.svg)](https://github.com/twsl/dbx-container/actions/workflows/build.yaml)
 [![Documentation](https://github.com/twsl/dbx-container/actions/workflows/docs.yaml/badge.svg)](https://github.com/twsl/dbx-container/actions/workflows/docs.yaml)
 [![Docs with MkDocs](https://img.shields.io/badge/MkDocs-docs?style=flat&logo=materialformkdocs&logoColor=white&color=%23526CFE)](https://squidfunk.github.io/mkdocs-material/)
@@ -13,27 +12,27 @@
 [![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-border.json)](https://github.com/copier-org/copier)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
+Create databricks runtime containers, [vibe coded](https://x.com/karpathy/status/1886192184808149383).
 
-Create databricks runtime containers
-
+Docker images are based on the [container definitions](https://github.com/databricks/containers) and [runtime information](https://docs.databricks.com/aws/en/release-notes/runtime/).
 
 ## Features
 
-- `...`
-
+-   `...`
 
 ## Installation
 
 With `pip`:
+
 ```bash
 python -m pip install dbx-container
 ```
 
 With [`poetry`](https://python-poetry.org/):
+
 ```bash
 poetry add dbx-container
 ```
-
 
 ## How to use it
 
@@ -43,13 +42,11 @@ import dbx_container
 ...
 ```
 
-
 ## Docs
 
 ```bash
 poetry run mkdocs build -f ./docs/mkdocs.yml -d ./_build/
 ```
-
 
 ## Update template
 

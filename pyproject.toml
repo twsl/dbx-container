@@ -34,9 +34,14 @@ classifiers = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
+requests = "^2.31.0"
+beautifulsoup4 = "^4.12.2"
+rich = "^13.7.0"
+pydantic = "^2.7.1"
+lxml = "^5.3.1"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.9.9"
+ruff = "^0.9.10"
 bandit = "^1.8.3"
 pre-commit = "^4.1.0"
 pyright = "^1.1.396"
@@ -51,7 +56,7 @@ nbconvert = "^7.16.6"
 [tool.poetry.group.test.dependencies]
 pytest = "^8.3.5"
 pytest-cov = "^6.0.0"
-pytest-mock = "^3.12.0"
+pytest-mock = "^3.14.0"
 pytest-cases = "^3.8.6"
 pytest-benchmark = "^5.1.0"
 
@@ -184,6 +189,7 @@ ignore = [
     "TRY002", # Allow default exceptions
     "TRY003",  # Avoid specifying messages outside exception class; overly strict, especially for ValueError
 ]
+
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
