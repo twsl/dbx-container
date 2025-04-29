@@ -49,7 +49,7 @@ vulture = "^2.14"
 copier = "^9.6.0"
 ipykernel = "^6.29.5"
 ipywidgets = "^8.1.5"
-ipython = "^9.0.2"
+ipython = "^9.2.0"
 jupytext = " ^1.16.6"
 nbconvert = "^7.16.6"
 
