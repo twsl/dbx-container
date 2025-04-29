@@ -41,7 +41,7 @@ pydantic = "^2.7.1"
 lxml = "^5.3.1"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.9.10"
+ruff = "^0.11.7"
 bandit = "^1.8.3"
 pre-commit = "^4.1.0"
 pyright = "^1.1.396"
