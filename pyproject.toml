@@ -37,7 +37,7 @@ python = "^3.11"
 requests = "^2.31.0"
 beautifulsoup4 = "^4.12.2"
 rich = "^13.7.0"
-pydantic = "^2.7.1"
+pydantic = "^2.11.4"
 lxml = "^5.3.1"
 
 [tool.poetry.group.dev.dependencies]
