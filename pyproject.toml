@@ -35,10 +35,10 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.11"
 requests = "^2.31.0"
-beautifulsoup4 = "^4.12.2"
-rich = "^13.7.0"
-pydantic = "^2.7.1"
-lxml = "^5.3.1"
+beautifulsoup4 = "^4.13.4"
+rich = "^14.0.0"
+pydantic = "^2.11.4"
+lxml = "^5.4.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.11.8"
@@ -46,7 +46,7 @@ bandit = "^1.8.3"
 pre-commit = "^4.2.0"
 pyright = "^1.1.400"
 vulture = "^2.14"
-copier = "^9.6.0"
+copier = "^9.7.1"
 ipykernel = "^6.29.5"
 ipywidgets = "^8.1.6"
 ipython = "^9.1.0"
