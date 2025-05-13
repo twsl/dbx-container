@@ -15,13 +15,13 @@ class DockerInstruction(ABC):
 class DockerfileBuilder:
     """Builds a Dockerfile from a base image and an optional list of features."""
 
-    def __init__(self, base_image: str, features: list[DockerInstruction] | None = None) -> None:
+    def __init__(self, base_image: str, instrs: list[DockerInstruction] | None = None) -> None:
         self.builder = StringBuilder()
         self.base_image = base_image
         # Apply any initial features
-        if features:
-            for feat in features:
-                feat.apply(self)
+        if instrs:
+            for instr in instrs:
+                instr.apply(self)
 
     def add_instruction(self, instruction: str) -> "DockerfileBuilder":
         """Add a generic instruction to the Dockerfile."""
