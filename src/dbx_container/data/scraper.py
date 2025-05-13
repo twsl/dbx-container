@@ -66,7 +66,7 @@ class RuntimeScraper:
         try:
             response = requests.get(url, timeout=30, verify=self.verify_ssl)
             response.raise_for_status()
-            return response.text
+            return response.text  # noqa: TRY300
         except requests.exceptions.RequestException:
             self.logger.exception(f"Error fetching page {url}")
             raise
@@ -326,6 +326,8 @@ class RuntimeScraper:
             self.logger.info(f"Successfully fetched {len(runtimes)} runtime versions")
         except Exception:
             self.logger.exception("Error scraping runtimes")
+
+        runtimes.sort(key=lambda r: r.release_date, reverse=True)
 
         return runtimes
 
