@@ -8,7 +8,7 @@ from dbx_container.docker.instructions import (
 )
 
 
-class MinimalUbuntuDockerfileBuilder(DockerfileBuilder):
+class MinimalUbuntuDockerfile(DockerfileBuilder):
     def __init__(self, base_image: str = "ubuntu:24.04", instrs: list[DockerInstruction] | None = None) -> None:
         instructions = [
             EnvInstruction(name="LANG", value="C.UTF-8"),

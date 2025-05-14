@@ -1,4 +1,6 @@
 # filepath: /workspaces/dbx-container/src/dbx_container/images/python.py
+from dataclasses import dataclass
+
 from dbx_container.docker.builder import DockerInstruction
 from dbx_container.docker.instructions import (
     ArgInstruction,
@@ -11,23 +13,30 @@ from dbx_container.docker.instructions import (
 from dbx_container.images.minimal import MinimalUbuntuDockerfileBuilder
 
 
-class PythonDockerfileBuilder(MinimalUbuntuDockerfileBuilder):
+@dataclass
+class PythonDockerfileVersions:
+    python: str = "3.12"
+    pip: str = "24.0"
+    setuptools: str = "74.0.0"
+    wheel: str = "0.38.4"
+    virtualenv: str = "20.26.2"
+
+
+class PythonDockerfile(MinimalUbuntuDockerfileBuilder):
     def __init__(
         self,
         base_image: str = "ubuntu:24.04",
-        python_version: str = "3.12",
-        pip_version: str = "24.0",
-        setuptools_version: str = "74.0.0",
-        wheel_version: str = "0.38.4",
-        virtualenv_version: str = "20.26.2",
+        versions: PythonDockerfileVersions | None = None,
         instrs: list[DockerInstruction] | None = None,
     ) -> None:
+        if versions is None:
+            versions = PythonDockerfileVersions()
         instructions = [
-            ArgInstruction(name="PYTHON_VERSION", default=f'"{python_version}"'),
-            ArgInstruction(name="PIP_VERSION", default=f'"{pip_version}"'),
-            ArgInstruction(name="SETUPTOOLS_VERSION", default=f'"{setuptools_version}"'),
-            ArgInstruction(name="WHEEL_VERSION", default=f'"{wheel_version}"'),
-            ArgInstruction(name="VIRTUALENV_VERSION", default=f'"{virtualenv_version}"'),
+            ArgInstruction(name="PYTHON_VERSION", default=f'"{versions.python}"'),
+            ArgInstruction(name="PIP_VERSION", default=f'"{versions.pip}"'),
+            ArgInstruction(name="SETUPTOOLS_VERSION", default=f'"{versions.setuptools}"'),
+            ArgInstruction(name="WHEEL_VERSION", default=f'"{versions.wheel}"'),
+            ArgInstruction(name="VIRTUALENV_VERSION", default=f'"{versions.virtualenv}"'),
             CommentInstruction(comment="Installs python and virtualenv for Spark and Notebooks"),
             RunInstruction(
                 command=(

@@ -4,18 +4,14 @@ from dbx_container.docker.instructions import (
     EnvInstruction,
     RunInstruction,
 )
-from dbx_container.images.python import PythonDockerfileBuilder
+from dbx_container.images.python import PythonDockerfile, PythonDockerfileVersions
 
 
-class DbfsFuseDockerfileBuilder(PythonDockerfileBuilder):
+class DbfsFuseDockerfile(PythonDockerfile):
     def __init__(
         self,
         base_image: str = "ubuntu:24.04",
-        python_version: str = "3.12",
-        pip_version: str = "24.0",
-        setuptools_version: str = "74.0.0",
-        wheel_version: str = "0.38.4",
-        virtualenv_version: str = "20.26.2",
+        versions: PythonDockerfileVersions | None = None,
         instrs: list[DockerInstruction] | None = None,
     ) -> None:
         instructions = [
@@ -29,4 +25,4 @@ class DbfsFuseDockerfileBuilder(PythonDockerfileBuilder):
         ]
         if instrs:
             instructions.extend(instrs)
-        super().__init__(base_image=base_image, instrs=instructions)
+        super().__init__(base_image=base_image, versions=versions, instrs=instructions)
