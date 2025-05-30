@@ -90,35 +90,33 @@ class RichLogger(logging.Logger):
 
     def progress(self, *args, **kwargs) -> Iterable[Any]:
         """Create a progress context manager."""
-        from rich.progress import track
+        from rich.console import Console
+        from rich.progress import Progress
 
-        # Check if there's already a live display active and use a simpler approach
-        try:
-            return track(*args, console=self.console, **kwargs)
-        except Exception:
-            # If there's a LiveError or other issue, fall back to simple iteration
-            # with periodic logging
-            sequence = args[0] if args else []
-            description = kwargs.get("description", "Processing")
-            total = len(sequence) if hasattr(sequence, "__len__") else None
+        # Always create a separate progress instance to avoid conflicts with existing live displays
+        sequence = args[0] if args else []
+        description = kwargs.get("description", "Processing")
 
-            # Log start
-            if total:
-                self.info(f"{description} - {total} items to process")
-            else:
-                self.info(f"{description}")
+        # Create a separate console to avoid conflicts with the shared console
+        separate_console = Console()
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=separate_console,
+            transient=True,
+        )
 
-            # Simple iteration with periodic updates
-            for i, item in enumerate(sequence):
-                if total and (i + 1) % max(1, total // 10) == 0:
-                    self.info(f"Progress: {i + 1}/{total}")
-                yield item
+        def _progress_generator():
+            with progress:
+                task_id = progress.add_task(description, total=len(sequence) if hasattr(sequence, "__len__") else None)
+                for item in sequence:
+                    yield item
+                    progress.advance(task_id, 1)
 
-            # Log completion
-            if total:
-                self.info(f"Completed processing {total} items")
-            else:
-                self.info("Processing completed")
+        return _progress_generator()
 
     def create_progress_bar(self, description: str = "Processing...") -> Progress:
         """Create a rich progress bar with standard configuration."""
