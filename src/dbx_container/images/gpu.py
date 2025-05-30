@@ -52,6 +52,8 @@ class GpuDockerfile(MinimalUbuntuDockerfile):
                     "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
                 )
             ),
+            CommentInstruction(comment="Add new user for cluster library installation"),
+            RunInstruction(command="useradd libraries && usermod -L libraries"),
         ]
 
         # Combine with any additional instructions passed in
