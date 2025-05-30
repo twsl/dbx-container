@@ -12,7 +12,7 @@ from dbx_container.models.runtime import Runtime
 from dbx_container.utils.logging import get_logger
 
 
-class ContainerEngine:
+class RuntimeContainerEngine:
     """Engine for building container variations across all Databricks runtimes."""
 
     def __init__(
@@ -311,7 +311,7 @@ class ContainerEngine:
 
 def main() -> None:
     """Main function to run the container engine."""
-    engine = ContainerEngine()
+    engine = RuntimeContainerEngine()
     engine.run()
 
 
