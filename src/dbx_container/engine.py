@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from rich.panel import Panel
+
 from dbx_container.data.scraper import RuntimeScraper
 from dbx_container.images.dbfsfuse import DbfsFuseDockerfile
 from dbx_container.images.gpu import GpuDockerfile
@@ -17,7 +19,7 @@ class RuntimeContainerEngine:
 
     def __init__(
         self,
-        data_dir: Path = Path("data"),
+        data_dir: Path = Path("../data"),
         max_workers: int = 5,
         verify_ssl: bool = False,
     ) -> None:
@@ -154,7 +156,7 @@ class RuntimeContainerEngine:
         dockerfile_path = runtime_dir / filename
         dockerfile_path.write_text(dockerfile_content)
 
-        self.logger.debug("Saved %s Dockerfile for runtime %s to %s", image_type, runtime.version, dockerfile_path)
+        self.logger.debug(f"Saved {image_type} Dockerfile for runtime {runtime.version} to {dockerfile_path}")
         return dockerfile_path
 
     def save_runtime_metadata(self, runtime: Runtime, image_type: str) -> Path:
@@ -207,7 +209,7 @@ class RuntimeContainerEngine:
         metadata_path = runtime_dir / filename
         metadata_path.write_text(json.dumps(metadata, indent=2))
 
-        self.logger.debug("Saved runtime metadata for %s to %s", runtime.version, metadata_path)
+        self.logger.debug(f"Saved runtime metadata for {runtime.version} to {metadata_path}")
         return metadata_path
 
     def build_all_images_for_runtime(self, runtime: Runtime) -> dict[str, list[Path]]:
@@ -219,10 +221,19 @@ class RuntimeContainerEngine:
         Returns:
             Dictionary mapping image types to lists of generated file paths
         """
-        self.logger.info(f"Building all image variations for runtime {runtime.version}")
+        runtime_display = f"[bold blue]{runtime.version}[/bold blue]"
+        if runtime.is_ml:
+            runtime_display += " [yellow](ML)[/yellow]"
+        if runtime.is_lts:
+            runtime_display += " [green](LTS)[/green]"
+
+        self.logger.print(f"\n🔨 Building images for runtime {runtime_display}")
         generated_files = {}
 
-        for image_type, config in self.image_types.items():
+        # Use rich track for progress indication
+        for image_type, config in self.logger.progress(
+            self.image_types.items(), description=f"Generating {runtime.version}"
+        ):
             try:
                 # Generate Dockerfile
                 dockerfile_content = self.generate_dockerfile_for_image_type(runtime, image_type, config)
@@ -233,10 +244,12 @@ class RuntimeContainerEngine:
 
                 generated_files[image_type] = [dockerfile_path, metadata_path]
 
-                self.logger.info(f"Generated {image_type} image for runtime {runtime.version}")
+                # Minimal success indication (no permanent log entry)
+                # Just log debug message instead of print
+                self.logger.debug(f"Generated {image_type} image")
 
             except Exception:
-                self.logger.exception("Failed to generate %s image for runtime %s", image_type, runtime.version)
+                self.logger.exception(f"Failed to generate {image_type} image for runtime {runtime.version}")
                 generated_files[image_type] = []
 
         return generated_files
@@ -247,19 +260,29 @@ class RuntimeContainerEngine:
         Returns:
             Nested dictionary: {runtime_version: {image_type: [file_paths]}}
         """
-        self.logger.info("Starting to build all images for all runtimes")
+        # Display a nice header
+        self.logger.print(
+            Panel(
+                "[bold green]🚀 DBX Container Builder[/bold green]\nBuilding Dockerfiles for all Databricks runtimes",
+                expand=False,
+                border_style="green",
+            )
+        )
 
         # Get all supported runtimes
-        runtimes = self.scraper.get_supported_runtimes()
+        with self.logger.status("[bold green]Fetching runtime information..."):
+            runtimes = self.scraper.get_supported_runtimes()
+
         if not runtimes:
             self.logger.error("No runtimes found")
             return {}
 
-        self.logger.info(f"Found {len(runtimes)} runtimes to process")
+        self.logger.print(f"\n[bold cyan]📋 Processing {len(runtimes)} runtimes[/bold cyan]")
 
         all_generated_files = {}
 
-        for runtime in runtimes:
+        # Use rich track for overall progress
+        for runtime in self.logger.progress(runtimes, description="Processing runtimes"):
             runtime_key = f"{runtime.version}{'_ml' if runtime.is_ml else ''}"
             generated_files = self.build_all_images_for_runtime(runtime)
             all_generated_files[runtime_key] = generated_files
@@ -267,7 +290,21 @@ class RuntimeContainerEngine:
         # Save summary report
         self.save_build_summary(all_generated_files)
 
-        self.logger.info(f"Completed building images for {len(runtimes)} runtimes")
+        # Final summary
+        total_files = sum(
+            len(files) for runtime_files in all_generated_files.values() for files in runtime_files.values()
+        )
+
+        self.logger.print(
+            Panel(
+                f"[bold green]✅ Build Complete![/bold green]\n"
+                f"Generated [bold cyan]{total_files}[/bold cyan] files for "
+                f"[bold cyan]{len(runtimes)}[/bold cyan] runtimes",
+                expand=False,
+                border_style="green",
+            )
+        )
+
         return all_generated_files
 
     def save_build_summary(self, all_generated_files: dict[str, dict[str, list[Path]]]) -> Path:
@@ -307,13 +344,3 @@ class RuntimeContainerEngine:
         result = self.build_all_images_for_all_runtimes()
         self.logger.info("ContainerEngine run completed")
         return result
-
-
-def main() -> None:
-    """Main function to run the container engine."""
-    engine = RuntimeContainerEngine()
-    engine.run()
-
-
-if __name__ == "__main__":
-    main()

@@ -1,27 +1,12 @@
-from collections import Counter
 from datetime import date, datetime
-import json
 from pathlib import Path
-import re
 from urllib.parse import urlparse, urlunparse
 import warnings
-from wsgiref import headers
 
-from bs4 import BeautifulSoup, ResultSet, Tag
-from bs4.element import NavigableString, PageElement
+from bs4 import BeautifulSoup
 import requests
-from rich.console import Console
 from rich.panel import Panel
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
 from rich.table import Table
-from rich.text import Text
 
 from dbx_container.models.environment import SystemEnvironment
 from dbx_container.models.runtime import Runtime, RuntimeRelease
@@ -54,7 +39,6 @@ class RuntimeScraper:
         self.verify_ssl = verify_ssl
         self.enable_save_load = enable_save_load
         self.data_dir = data_dir
-        self.console = Console()
 
         # Suppress InsecureRequestWarning if SSL verification is disabled
         if not verify_ssl:
@@ -314,8 +298,8 @@ class RuntimeScraper:
             self.logger.info("Fetching runtime version links")
             releases = self._scrape_runtime_links()
 
-            # Process each link
-            for release in releases:
+            # Process each link with progress bar
+            for release in self.logger.progress(releases, description="[green]Processing runtimes"):
                 self.logger.debug(f"Processing runtime release {release.version}")
                 parsed_runtimes = self._parse_runtime(release)
                 if parsed_runtimes:
@@ -338,7 +322,7 @@ class RuntimeScraper:
         runtimes = self.get_supported_runtimes()
 
         if not runtimes:
-            self.console.print(Panel("Failed to fetch runtime information.", title="Error", style="red"))
+            self.logger.print(Panel("Failed to fetch runtime information.", title="Error", style="red"))
             return False
 
         # Create a rich table
@@ -366,6 +350,6 @@ class RuntimeScraper:
             )
 
         # Print the table
-        self.console.print(table)
+        self.logger.print(table)
         self.logger.debug("Displayed runtime information successfully.")
         return True
