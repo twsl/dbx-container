@@ -10,7 +10,7 @@ from dbx_container.docker.instructions import (
     RunInstruction,
     UserInstruction,
 )
-from dbx_container.images.minimal import MinimalUbuntuDockerfileBuilder
+from dbx_container.images.minimal import MinimalUbuntuDockerfile
 
 
 @dataclass
@@ -22,7 +22,7 @@ class PythonDockerfileVersions:
     virtualenv: str = "20.26.2"
 
 
-class PythonDockerfile(MinimalUbuntuDockerfileBuilder):
+class PythonDockerfile(MinimalUbuntuDockerfile):
     def __init__(
         self,
         base_image: str = "ubuntu:24.04",
