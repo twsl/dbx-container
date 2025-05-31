@@ -23,22 +23,16 @@ class RuntimeScraper:
         self,
         max_workers: int = 5,
         verify_ssl: bool = False,
-        enable_save_load: bool = True,
-        data_dir: Path = Path("../data/"),
     ) -> None:
         """Initialize the RuntimeScraper.
 
         Args:
             max_workers: Maximum number of worker threads to use for fetching runtime data.
             verify_ssl: Whether to verify SSL certificates when making HTTP requests.
-            enable_save_load: Whether to enable saving and loading of runtime data.
-            data_dir: Directory where to save runtime data.
         """
         self.logger = get_logger(self.__class__.__name__)
         self.max_workers = max_workers
         self.verify_ssl = verify_ssl
-        self.enable_save_load = enable_save_load
-        self.data_dir = data_dir
 
         # Suppress InsecureRequestWarning if SSL verification is disabled
         if not verify_ssl:

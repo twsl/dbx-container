@@ -19,7 +19,7 @@ class RuntimeContainerEngine:
 
     def __init__(
         self,
-        data_dir: Path = Path("../data"),
+        data_dir: Path | str = Path("./data"),
         max_workers: int = 5,
         verify_ssl: bool = False,
     ) -> None:
@@ -31,13 +31,8 @@ class RuntimeContainerEngine:
             verify_ssl: Whether to verify SSL certificates when making HTTP requests
         """
         self.logger = get_logger(self.__class__.__name__)
-        self.data_dir = Path(data_dir)
-        self.scraper = RuntimeScraper(
-            max_workers=max_workers,
-            verify_ssl=verify_ssl,
-            enable_save_load=True,
-            data_dir=data_dir,
-        )
+        self.data_dir = Path(data_dir) if isinstance(data_dir, str) else data_dir
+        self.scraper = RuntimeScraper(max_workers=max_workers, verify_ssl=verify_ssl)
 
         # Ensure data directory exists
         self.data_dir.mkdir(exist_ok=True)
@@ -230,9 +225,15 @@ class RuntimeContainerEngine:
         self.logger.print(f"\n🔨 Building images for runtime {runtime_display}")
         generated_files = {}
 
+        # Only build runtime variations for python and gpu image types
+        runtime_specific_types = ["python", "gpu"]
+
+        # Filter image types to only those that need runtime variations
+        filtered_image_types = {k: v for k, v in self.image_types.items() if k in runtime_specific_types}
+
         # Use rich track for progress indication
         for image_type, config in self.logger.progress(
-            self.image_types.items(), description=f"Generating {runtime.version}"
+            filtered_image_types.items(), description=f"Generating {runtime.version}"
         ):
             try:
                 # Generate Dockerfile
@@ -253,6 +254,100 @@ class RuntimeContainerEngine:
                 generated_files[image_type] = []
 
         return generated_files
+
+    def build_non_runtime_specific_images(self, reference_runtime: Runtime) -> dict[str, list[Path]]:
+        """Build image types that don't need runtime variations.
+
+        Args:
+            reference_runtime: A reference runtime to use for base configuration
+
+        Returns:
+            Dictionary mapping image types to lists of generated file paths
+        """
+        self.logger.print("\n🔨 Building non-runtime-specific images")
+        generated_files = {}
+
+        # Image types that don't need runtime variations
+        non_runtime_types = ["minimal", "dbfsfuse", "standard"]
+
+        # Filter image types to only those that don't need runtime variations
+        filtered_image_types = {k: v for k, v in self.image_types.items() if k in non_runtime_types}
+
+        # Use rich track for progress indication
+        for image_type, config in self.logger.progress(
+            filtered_image_types.items(), description="Generating non-runtime-specific images"
+        ):
+            try:
+                # Generate Dockerfile using reference runtime
+                dockerfile_content = self.generate_dockerfile_for_image_type(reference_runtime, image_type, config)
+
+                # Save to a generic location without runtime version
+                base_dir = self.data_dir / image_type / "latest"
+                base_dir.mkdir(parents=True, exist_ok=True)
+
+                dockerfile_path = base_dir / "Dockerfile"
+                dockerfile_path.write_text(dockerfile_content)
+
+                # Save metadata
+                metadata_path = self.save_runtime_metadata_generic(reference_runtime, image_type)
+
+                generated_files[image_type] = [dockerfile_path, metadata_path]
+
+                self.logger.debug(f"Generated {image_type} image (non-runtime-specific)")
+
+            except Exception:
+                self.logger.exception(f"Failed to generate {image_type} image (non-runtime-specific)")
+                generated_files[image_type] = []
+
+        self.logger.info(f"Successfully generated {len(filtered_image_types.items())} images")
+        return generated_files
+
+    def save_runtime_metadata_generic(self, runtime: Runtime, image_type: str) -> Path:
+        """Save generic runtime metadata for non-runtime-specific images.
+
+        Args:
+            runtime: The reference runtime used for metadata
+            image_type: The type of image this metadata corresponds to
+
+        Returns:
+            Path to the saved metadata file
+        """
+        base_dir = self.data_dir / image_type / "latest"
+        base_dir.mkdir(parents=True, exist_ok=True)
+
+        release_date = (
+            runtime.release_date if isinstance(runtime.release_date, str) else runtime.release_date.isoformat()
+        )
+        eos_date = (
+            runtime.end_of_support_date
+            if isinstance(runtime.end_of_support_date, str)
+            else runtime.end_of_support_date.isoformat()
+        )
+
+        # Prepare metadata
+        metadata = {
+            "note": "This is a generic image not tied to a specific runtime version",
+            "reference_runtime_version": runtime.version,
+            "reference_release_date": release_date,
+            "reference_end_of_support_date": eos_date,
+            "reference_spark_version": runtime.spark_version,
+            "reference_url": runtime.url,
+            "system_environment": {
+                "operating_system": runtime.system_environment.operating_system,
+                "java_version": runtime.system_environment.java_version,
+                "scala_version": runtime.system_environment.scala_version,
+                "python_version": runtime.system_environment.python_version,
+                "r_version": runtime.system_environment.r_version,
+                "delta_lake_version": runtime.system_environment.delta_lake_version,
+            },
+            "included_libraries": runtime.included_libraries,
+        }
+
+        metadata_path = base_dir / "runtime_metadata.json"
+        metadata_path.write_text(json.dumps(metadata, indent=2))
+
+        self.logger.debug(f"Saved generic runtime metadata for {image_type} to {metadata_path}")
+        return metadata_path
 
     def build_all_images_for_all_runtimes(self) -> dict[str, dict[str, list[Path]]]:
         """Build all image variations for all available runtimes.
@@ -280,6 +375,12 @@ class RuntimeContainerEngine:
         self.logger.print(f"\n[bold cyan]📋 Processing {len(runtimes)} runtimes[/bold cyan]")
 
         all_generated_files = {}
+
+        # Build non-runtime-specific images once using the first runtime as reference
+        if runtimes:
+            reference_runtime = runtimes[0]
+            non_runtime_files = self.build_non_runtime_specific_images(reference_runtime)
+            all_generated_files["non_runtime_specific"] = non_runtime_files
 
         # Use rich track for overall progress
         for runtime in self.logger.progress(runtimes, description="Processing runtimes"):
