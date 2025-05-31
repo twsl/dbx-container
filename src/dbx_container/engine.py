@@ -90,30 +90,122 @@ class RuntimeContainerEngine:
 
         return PythonDockerfileVersions(python=python_version)
 
-    def generate_dockerfile_for_image_type(self, runtime: Runtime, image_type: str, config: dict[str, Any]) -> str:
+    def get_os_version_from_runtime(self, runtime: Runtime) -> str:
+        """Extract OS version information from runtime to configure base images.
+
+        Args:
+            runtime: The runtime object containing environment information
+
+        Returns:
+            Ubuntu version string (e.g., "20.04", "22.04", "24.04")
+        """
+        env = runtime.system_environment
+        os_info = env.operating_system.lower()
+
+        # Extract Ubuntu version from OS string
+        if "ubuntu 24.04" in os_info:
+            return "24.04"
+        elif "ubuntu 22.04" in os_info:
+            return "22.04"
+        elif "ubuntu 20.04" in os_info:
+            return "20.04"
+        elif "ubuntu 18.04" in os_info:
+            return "18.04"
+        else:
+            # Default to latest LTS if we can't determine
+            return "24.04"
+
+    def get_base_image_variations(self, runtime: Runtime) -> list[dict[str, str]]:
+        """Generate base image variations for a runtime based on OS and Python versions.
+
+        Args:
+            runtime: The runtime object containing environment information
+
+        Returns:
+            List of dictionaries with base_image, os_version, and python_version
+        """
+        env = runtime.system_environment
+        os_version = self.get_os_version_from_runtime(runtime)
+        python_version = env.python_version.split()[0] if env.python_version else "3.12"
+
+        # Extract major.minor version (e.g., "3.11" from "3.11.11")
+        if "." in python_version:
+            parts = python_version.split(".")
+            if len(parts) >= 2:
+                python_version = f"{parts[0]}.{parts[1]}"
+
+        # Generate variations for different OS versions and Python versions
+        # We'll create images for the runtime's specific versions plus some common alternatives
+        variations = []
+
+        # Primary variation - exact runtime match
+        variations.append({
+            "base_image": f"ubuntu:{os_version}",
+            "os_version": os_version,
+            "python_version": python_version,
+            "variation_name": f"ubuntu{os_version}-python{python_version}"
+        })
+
+        # Additional variations for broader compatibility
+        # Only add if different from primary
+        common_os_versions = ["22.04", "24.04"]
+        common_python_versions = ["3.10", "3.11", "3.12"]
+
+        for alt_os in common_os_versions:
+            for alt_python in common_python_versions:
+                if alt_os != os_version or alt_python != python_version:
+                    variations.append({
+                        "base_image": f"ubuntu:{alt_os}",
+                        "os_version": alt_os,
+                        "python_version": alt_python,
+                        "variation_name": f"ubuntu{alt_os}-python{alt_python}"
+                    })
+
+        return variations
+
+    def generate_dockerfile_for_image_type(self, runtime: Runtime, image_type: str, config: dict[str, Any], variation: dict[str, str] | None = None) -> str:
         """Generate a Dockerfile for a specific image type and runtime.
 
         Args:
             runtime: The runtime to build the container for
             image_type: The type of image to build
             config: Configuration for the image type
+            variation: Optional base image variation with os_version and python_version
 
         Returns:
             The generated Dockerfile content as a string
         """
-        self.logger.debug(f"Generating {image_type} image for runtime {runtime.version}")
+        variation_info = f" ({variation['variation_name']})" if variation else ""
+        self.logger.debug(f"Generating {image_type} image for runtime {runtime.version}{variation_info}")
 
-        # Get the appropriate base image based on runtime requirements
-        base_image = "ubuntu:24.04"
+        # Get the appropriate base image based on runtime requirements and variation
+        if variation:
+            base_image = variation["base_image"]
+            python_version = variation["python_version"]
+        else:
+            # Fallback to original logic for non-runtime-specific images
+            base_image = "ubuntu:24.04"
+            python_version = None
 
         # For GPU images, we need to adjust the base image
         if image_type == "gpu":
-            base_image = config["kwargs"].get("base_image", "ubuntu:22.04")
+            if variation:
+                # Use the OS version from variation but keep GPU base structure
+                os_version = variation["os_version"]
+                cuda_version = config["kwargs"].get("cuda_version", "11.8.0")
+                cudnn_version = config["kwargs"].get("cudnn_version", "8")
+                base_image = f"nvidia/cuda:{cuda_version}-cudnn{cudnn_version}-runtime-ubuntu{os_version.replace('.', '')}"
+            else:
+                base_image = config["kwargs"].get("base_image", "ubuntu:22.04")
 
         # Extract Python versions for Python-based images
         kwargs = config["kwargs"].copy()
-        if "versions" not in kwargs and image_type in ["python", "dbfsfuse", "standard"]:
-            kwargs["versions"] = self.get_python_versions_from_runtime(runtime)
+        if image_type in ["python", "dbfsfuse", "standard"]:
+            if variation and python_version:
+                # Use the specific Python version from variation
+                kwargs["versions"] = PythonDockerfileVersions(python=python_version)
+            elif "versions" not in kwargs:
+                kwargs["versions"] = self.get_python_versions_from_runtime(runtime)
 
         # Override base image if not already specified
         if "base_image" not in kwargs:
@@ -128,19 +220,23 @@ class RuntimeContainerEngine:
 
         return dockerfile_content
 
-    def save_dockerfile(self, dockerfile_content: str, runtime: Runtime, image_type: str) -> Path:
+    def save_dockerfile(self, dockerfile_content: str, runtime: Runtime, image_type: str, variation: dict[str, str] | None = None) -> Path:
         """Save a generated Dockerfile to the appropriate location.
 
         Args:
             dockerfile_content: The Dockerfile content to save
             runtime: The runtime this Dockerfile is for
             image_type: The type of image
+            variation: Optional base image variation info
 
         Returns:
             Path to the saved file
         """
-        # Create directory structure: data/{image_type}/{runtime_version}/
-        runtime_dir = self.data_dir / image_type / runtime.version
+        # Create directory structure: data/{image_type}/{runtime_version}/{variation_name}/
+        if variation:
+            runtime_dir = self.data_dir / image_type / runtime.version / variation["variation_name"]
+        else:
+            runtime_dir = self.data_dir / image_type / runtime.version
         runtime_dir.mkdir(parents=True, exist_ok=True)
 
         # Determine filename - include ML suffix if it's an ML runtime
@@ -151,20 +247,25 @@ class RuntimeContainerEngine:
         dockerfile_path = runtime_dir / filename
         dockerfile_path.write_text(dockerfile_content)
 
-        self.logger.debug(f"Saved {image_type} Dockerfile for runtime {runtime.version} to {dockerfile_path}")
+        variation_info = f" ({variation['variation_name']})" if variation else ""
+        self.logger.debug(f"Saved {image_type} Dockerfile for runtime {runtime.version}{variation_info} to {dockerfile_path}")
         return dockerfile_path
 
-    def save_runtime_metadata(self, runtime: Runtime, image_type: str) -> Path:
+    def save_runtime_metadata(self, runtime: Runtime, image_type: str, variation: dict[str, str] | None = None) -> Path:
         """Save runtime metadata as JSON for reference.
 
         Args:
             runtime: The runtime to save metadata for
             image_type: The type of image this metadata corresponds to
+            variation: Optional base image variation info
 
         Returns:
             Path to the saved metadata file
         """
-        runtime_dir = self.data_dir / image_type / runtime.version
+        if variation:
+            runtime_dir = self.data_dir / image_type / runtime.version / variation["variation_name"]
+        else:
+            runtime_dir = self.data_dir / image_type / runtime.version
         runtime_dir.mkdir(parents=True, exist_ok=True)
 
         release_date = (
@@ -196,6 +297,15 @@ class RuntimeContainerEngine:
             "included_libraries": runtime.included_libraries,
         }
 
+        # Add variation information if present
+        if variation:
+            metadata["image_variation"] = {
+                "base_image": variation["base_image"],
+                "os_version": variation["os_version"],
+                "python_version": variation["python_version"],
+                "variation_name": variation["variation_name"]
+            }
+
         # Determine filename
         filename = "runtime_metadata.json"
         if runtime.is_ml:
@@ -204,7 +314,8 @@ class RuntimeContainerEngine:
         metadata_path = runtime_dir / filename
         metadata_path.write_text(json.dumps(metadata, indent=2))
 
-        self.logger.debug(f"Saved runtime metadata for {runtime.version} to {metadata_path}")
+        variation_info = f" ({variation['variation_name']})" if variation else ""
+        self.logger.debug(f"Saved runtime metadata for {runtime.version}{variation_info} to {metadata_path}")
         return metadata_path
 
     def build_all_images_for_runtime(self, runtime: Runtime) -> dict[str, list[Path]]:
@@ -231,27 +342,33 @@ class RuntimeContainerEngine:
         # Filter image types to only those that need runtime variations
         filtered_image_types = {k: v for k, v in self.image_types.items() if k in runtime_specific_types}
 
+        # Get base image variations for this runtime
+        variations = self.get_base_image_variations(runtime)
+
         # Use rich track for progress indication
         for image_type, config in self.logger.progress(
             filtered_image_types.items(), description=f"Generating {runtime.version}"
         ):
-            try:
-                # Generate Dockerfile
-                dockerfile_content = self.generate_dockerfile_for_image_type(runtime, image_type, config)
-                dockerfile_path = self.save_dockerfile(dockerfile_content, runtime, image_type)
+            generated_files[image_type] = []
+            
+            # Build image for each variation
+            for variation in variations:
+                try:
+                    # Generate Dockerfile
+                    dockerfile_content = self.generate_dockerfile_for_image_type(runtime, image_type, config, variation)
+                    dockerfile_path = self.save_dockerfile(dockerfile_content, runtime, image_type, variation)
 
-                # Save metadata
-                metadata_path = self.save_runtime_metadata(runtime, image_type)
+                    # Save metadata
+                    metadata_path = self.save_runtime_metadata(runtime, image_type, variation)
 
-                generated_files[image_type] = [dockerfile_path, metadata_path]
+                    generated_files[image_type].extend([dockerfile_path, metadata_path])
 
-                # Minimal success indication (no permanent log entry)
-                # Just log debug message instead of print
-                self.logger.debug(f"Generated {image_type} image")
+                    # Minimal success indication (no permanent log entry)
+                    # Just log debug message instead of print
+                    self.logger.debug(f"Generated {image_type} image for {variation['variation_name']}")
 
-            except Exception:
-                self.logger.exception(f"Failed to generate {image_type} image for runtime {runtime.version}")
-                generated_files[image_type] = []
+                except Exception:
+                    self.logger.exception(f"Failed to generate {image_type} image for runtime {runtime.version} variation {variation['variation_name']}")
 
         return generated_files
 
