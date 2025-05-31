@@ -15,9 +15,9 @@ class DockerInstruction(ABC):
 class DockerfileBuilder:
     """Builds a Dockerfile from a base image and an optional list of features."""
 
-    def __init__(self, base_image: str, instrs: list[DockerInstruction] | None = None) -> None:
+    def __init__(self, base_image: DockerInstruction, instrs: list[DockerInstruction] | None = None) -> None:
         self.builder = StringBuilder()
-        self.base_image = base_image
+        base_image.apply(self)
         # Apply any initial features
         if instrs:
             for instr in instrs:

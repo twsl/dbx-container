@@ -3,6 +3,7 @@ from dbx_container.docker.instructions import (
     ArgInstruction,
     CommentInstruction,
     EnvInstruction,
+    FromInstruction,
     RunInstruction,
     UserInstruction,
 )
@@ -62,4 +63,4 @@ class MinimalUbuntuDockerfile(DockerfileBuilder):
         ]
         if instrs:
             instructions.extend(instrs)
-        super().__init__(base_image=base_image, instrs=instructions)
+        super().__init__(base_image=FromInstruction(base_image), instrs=instructions)
