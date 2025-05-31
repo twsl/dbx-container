@@ -21,6 +21,8 @@ class GpuDockerfile(MinimalUbuntuDockerfile):
         base_image: str = "ubuntu:22.04",  # TODO: Update to 24.04
         instrs: list[DockerInstruction] | None = None,
     ) -> None:
+        self.cuda_version = cuda_version
+        self.cudnn_version = cudnn_version
         base_image = f"nvidia/cuda:{cuda_version}-cudnn{cudnn_version}-runtime-{base_image.replace(':', '')}"
         # Instructions specific to the GPU image
         gpu_instructions = [
@@ -62,3 +64,7 @@ class GpuDockerfile(MinimalUbuntuDockerfile):
 
         # Initialize the parent minimal dockerfile with our additional instructions
         super().__init__(base_image=base_image, instrs=gpu_instructions)
+
+    @property
+    def image_name(self) -> str:
+        return "gpu" + self.cuda_version

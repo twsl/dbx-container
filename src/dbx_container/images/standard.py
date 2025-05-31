@@ -41,3 +41,7 @@ class StandardDockerfile(DbfsFuseDockerfile):
 
         # Initialize the parent dbfsfuse dockerfile with our additional instructions
         super().__init__(base_image=base_image, versions=versions, instrs=standard_instructions)
+
+    @property
+    def image_name(self) -> str:
+        return "standard" + self.versions.python

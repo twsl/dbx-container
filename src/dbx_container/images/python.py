@@ -30,13 +30,15 @@ class PythonDockerfile(MinimalUbuntuDockerfile):
         instrs: list[DockerInstruction] | None = None,
     ) -> None:
         if versions is None:
-            versions = PythonDockerfileVersions()
+            self.versions = PythonDockerfileVersions()
+        else:
+            self.versions = versions
         instructions = [
-            ArgInstruction(name="PYTHON_VERSION", default=f'"{versions.python}"'),
-            ArgInstruction(name="PIP_VERSION", default=f'"{versions.pip}"'),
-            ArgInstruction(name="SETUPTOOLS_VERSION", default=f'"{versions.setuptools}"'),
-            ArgInstruction(name="WHEEL_VERSION", default=f'"{versions.wheel}"'),
-            ArgInstruction(name="VIRTUALENV_VERSION", default=f'"{versions.virtualenv}"'),
+            ArgInstruction(name="PYTHON_VERSION", default=f'"{self.versions.python}"'),
+            ArgInstruction(name="PIP_VERSION", default=f'"{self.versions.pip}"'),
+            ArgInstruction(name="SETUPTOOLS_VERSION", default=f'"{self.versions.setuptools}"'),
+            ArgInstruction(name="WHEEL_VERSION", default=f'"{self.versions.wheel}"'),
+            ArgInstruction(name="VIRTUALENV_VERSION", default=f'"{self.versions.virtualenv}"'),
             CommentInstruction(comment="Installs python and virtualenv for Spark and Notebooks"),
             RunInstruction(
                 command=(
@@ -90,3 +92,7 @@ class PythonDockerfile(MinimalUbuntuDockerfile):
         if instrs:
             instructions.extend(instrs)
         super().__init__(base_image=base_image, instrs=instructions)
+
+    @property
+    def image_name(self) -> str:
+        return "python" + self.versions.python

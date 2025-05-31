@@ -26,3 +26,7 @@ class DbfsFuseDockerfile(PythonDockerfile):
         if instrs:
             instructions.extend(instrs)
         super().__init__(base_image=base_image, versions=versions, instrs=instructions)
+
+    @property
+    def image_name(self) -> str:
+        return "dbfsfuse" + self.versions.python

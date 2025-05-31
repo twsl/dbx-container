@@ -64,3 +64,7 @@ class MinimalUbuntuDockerfile(DockerfileBuilder):
         if instrs:
             instructions.extend(instrs)
         super().__init__(base_image=FromInstruction(base_image), instrs=instructions)
+
+    @property
+    def image_name(self) -> str:
+        return "minimal"
