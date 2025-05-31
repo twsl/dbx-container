@@ -10,7 +10,10 @@ class FromInstruction(DockerInstruction):
         self.image = image
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"FROM {self.image}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"FROM {self.image}"
 
 
 class ArgInstruction(DockerInstruction):
@@ -21,10 +24,12 @@ class ArgInstruction(DockerInstruction):
         self.default = default
 
     def apply(self, builder: DockerfileBuilder) -> None:
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
         if self.default is None:
-            builder.add_instruction(f"ARG {self.name}")
-        else:
-            builder.add_instruction(f"ARG {self.name}={self.default}")
+            return f"ARG {self.name}"
+        return f"ARG {self.name}={self.default}"
 
 
 class EnvInstruction(DockerInstruction):
@@ -35,7 +40,10 @@ class EnvInstruction(DockerInstruction):
         self.value = value
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"ENV {self.name}={self.value}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"ENV {self.name}={self.value}"
 
 
 class RunInstruction(DockerInstruction):
@@ -45,7 +53,10 @@ class RunInstruction(DockerInstruction):
         self.command = command
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"RUN {self.command}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"RUN {self.command}"
 
 
 class WorkdirInstruction(DockerInstruction):
@@ -55,7 +66,10 @@ class WorkdirInstruction(DockerInstruction):
         self.path = path
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"WORKDIR {self.path}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"WORKDIR {self.path}"
 
 
 class EntrypointInstruction(DockerInstruction):
@@ -65,7 +79,10 @@ class EntrypointInstruction(DockerInstruction):
         self.entrypoint = entrypoint
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"ENTRYPOINT {self.entrypoint}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"ENTRYPOINT {self.entrypoint}"
 
 
 class CopyInstruction(DockerInstruction):
@@ -77,8 +94,12 @@ class CopyInstruction(DockerInstruction):
         self.chown = chown
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        prefix = f"--chown={self.chown} " if self.chown else ""
-        builder.add_instruction(f"COPY {prefix}{self.src} {self.dest}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        if self.chown:
+            return f"COPY --chown={self.chown} {self.src} {self.dest}"
+        return f"COPY {self.src} {self.dest}"
 
 
 class CmdInstruction(DockerInstruction):
@@ -88,7 +109,10 @@ class CmdInstruction(DockerInstruction):
         self.cmd = cmd
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"CMD {self.cmd}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"CMD {self.cmd}"
 
 
 class CommentInstruction(DockerInstruction):
@@ -98,7 +122,10 @@ class CommentInstruction(DockerInstruction):
         self.comment = comment
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"# {self.comment}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"# {self.comment}"
 
 
 class LabelInstruction(DockerInstruction):
@@ -109,7 +136,10 @@ class LabelInstruction(DockerInstruction):
         self.value = value
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"LABEL {self.key}={self.value}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"LABEL {self.key}={self.value}"
 
 
 class ExposeInstruction(DockerInstruction):
@@ -119,7 +149,10 @@ class ExposeInstruction(DockerInstruction):
         self.port = port
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"EXPOSE {self.port}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"EXPOSE {self.port}"
 
 
 class UserInstruction(DockerInstruction):
@@ -129,7 +162,10 @@ class UserInstruction(DockerInstruction):
         self.user = user
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"USER {self.user}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"USER {self.user}"
 
 
 class VolumeInstruction(DockerInstruction):
@@ -139,7 +175,10 @@ class VolumeInstruction(DockerInstruction):
         self.path = path
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"VOLUME {self.path}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"VOLUME {self.path}"
 
 
 class HealthcheckInstruction(DockerInstruction):
@@ -152,9 +191,10 @@ class HealthcheckInstruction(DockerInstruction):
         self.retries = retries
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(
-            f"HEALTHCHECK --interval={self.interval} --timeout={self.timeout} --retries={self.retries} CMD {self.command}"
-        )
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"HEALTHCHECK --interval={self.interval} --timeout={self.timeout} --retries={self.retries} CMD {self.command}"
 
 
 class ShellInstruction(DockerInstruction):
@@ -164,7 +204,10 @@ class ShellInstruction(DockerInstruction):
         self.shell = shell
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"SHELL {self.shell}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"SHELL {self.shell}"
 
 
 class AddInstruction(DockerInstruction):
@@ -175,7 +218,10 @@ class AddInstruction(DockerInstruction):
         self.dest = dest
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"ADD {self.src} {self.dest}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"ADD {self.src} {self.dest}"
 
 
 class StopSignalInstruction(DockerInstruction):
@@ -185,7 +231,10 @@ class StopSignalInstruction(DockerInstruction):
         self.signal = signal
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"STOPSIGNAL {self.signal}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"STOPSIGNAL {self.signal}"
 
 
 class OnbuildInstruction(DockerInstruction):
@@ -195,4 +244,7 @@ class OnbuildInstruction(DockerInstruction):
         self.instruction = instruction
 
     def apply(self, builder: DockerfileBuilder) -> None:
-        builder.add_instruction(f"ONBUILD {self.instruction}")
+        builder.add_instruction(str(self))
+
+    def __str__(self) -> str:
+        return f"ONBUILD {self.instruction}"

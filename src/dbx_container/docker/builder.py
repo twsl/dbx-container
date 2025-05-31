@@ -15,13 +15,26 @@ class DockerInstruction(ABC):
 class DockerfileBuilder:
     """Builds a Dockerfile from a base image and an optional list of features."""
 
+    # Default namespace for Docker images
+    DEFAULT_NAMESPACE = "ghcr.io/twsl"
+
     def __init__(self, base_image: DockerInstruction, instrs: list[DockerInstruction] | None = None) -> None:
         self.builder = StringBuilder()
-        base_image.apply(self)
+        self.base_image = base_image
+        self.base_image.apply(self)
         # Apply any initial features
         if instrs:
             for instr in instrs:
                 instr.apply(self)
+
+    @property
+    def image_name(self) -> str:
+        return getattr(self.base_image, "image", str(self.base_image))
+
+    @property
+    def full_image_name(self) -> str:
+        """Get the full image name with namespace."""
+        return f"{self.DEFAULT_NAMESPACE}/{self.image_name}"
 
     def add_instruction(self, instruction: str) -> "DockerfileBuilder":
         """Add a generic instruction to the Dockerfile."""
@@ -39,7 +52,7 @@ class DockerfileBuilder:
         return self
 
     @classmethod
-    def from_features(cls, base_image: str, *features: DockerInstruction) -> "DockerfileBuilder":
+    def from_features(cls, base_image: DockerInstruction, *features: DockerInstruction) -> "DockerfileBuilder":
         """Construct a builder with base image and a sequence of features."""
         return cls(base_image, list(features))
 
