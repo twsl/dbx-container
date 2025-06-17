@@ -29,7 +29,7 @@ class GpuDockerfile(MinimalUbuntuDockerfile):
             CommentInstruction(comment="Disable NVIDIA repos to prevent accidental upgrades"),
             RunInstruction(
                 command=(
-                    "cd /etc/apt/sources.list.d && mv cuda-ubuntu2204-x86_64.list cuda-ubuntu2204-x86_64.list.disabled"
+                    f"cd /etc/apt/sources.list.d && mv cuda-{base_image.replace(':', '')}-x86_64.list cuda-{base_image.replace(':', '')}-x86_64.list.disabled"
                 )
             ),
             CommentInstruction(
