@@ -77,7 +77,7 @@ optional = true
 
 [tool.poetry.group.debug.dependencies]
 ipdb = "^0.13.9"
-line_profiler = "^4.2.0"
+line_profiler = "^5.0.0"
 
 [project.scripts]
 dbx-container = "dbx_container.cli:main"
