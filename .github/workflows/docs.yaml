@@ -89,6 +89,9 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           path: artifacts
+          
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
