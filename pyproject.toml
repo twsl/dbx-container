@@ -36,7 +36,7 @@ classifiers = [
 python = "^3.11"
 requests = "^2.32.5"
 beautifulsoup4 = "^4.14.2"
-rich = "^14.1.0"
+rich = "^14.2.0"
 pydantic = "^2.11.7"
 lxml = "^6.0.0"
 
