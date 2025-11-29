@@ -14,9 +14,12 @@ jobs:
     runs-on: ['ubuntu-latest']
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
 
       - name: Set up Python ${{ env.python-version }}
         uses: actions/setup-python@v6
@@ -74,7 +77,7 @@ jobs:
     needs: release
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Download artifacts
         uses: actions/download-artifact@v6
