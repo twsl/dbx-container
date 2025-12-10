@@ -1,38 +1,71 @@
 # filepath: /workspaces/dbx-container/src/dbx_container/images/python.py
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from dbx_container.docker.builder import DockerInstruction
+from dbx_container.docker.builder import DockerfileBuilder, DockerInstruction
 from dbx_container.docker.instructions import (
     ArgInstruction,
     CommentInstruction,
     CopyInstruction,
     EnvInstruction,
+    FromInstruction,
+    LabelInstruction,
     RunInstruction,
-    UserInstruction,
 )
-from dbx_container.images.minimal import MinimalUbuntuDockerfile
+from dbx_container.models.runtime import Runtime
 
 
+# https://github.com/databricks/containers/blob/master/ubuntu/python/Dockerfile
 @dataclass
 class PythonDockerfileVersions:
     python: str = "3.12"
-    pip: str = "24.0"
+    pip: str = "25.0.1"
     setuptools: str = "74.0.0"
-    wheel: str = "0.38.4"
-    virtualenv: str = "20.26.2"
+    wheel: str = "0.45.1"
+    virtualenv: str = "20.29.3"
 
 
-class PythonDockerfile(MinimalUbuntuDockerfile):
+class PythonDockerfile(DockerfileBuilder):
+    """Python container that builds on top of standard image.
+
+    Can be built on top of GPU standard variant for GPU dependency chain.
+    """
+
     def __init__(
         self,
-        base_image: str = "ubuntu:24.04",
+        runtime: Runtime,
+        base_image: str | None = None,
         versions: PythonDockerfileVersions | None = None,
         instrs: list[DockerInstruction] | None = None,
+        registry: str | None = None,
+        use_gpu_base: bool = False,
+        requirements_path: str | None = None,
     ) -> None:
+        self.use_gpu_base = use_gpu_base
+
         if versions is None:
             self.versions = PythonDockerfileVersions()
         else:
             self.versions = versions
+
+        self.runtime = runtime
+        # Determine base image
+        if base_image is None:
+            base_image = "dbx-runtime:standard-gpu" if use_gpu_base else "dbx-runtime:standard"
+
+        # Determine requirements.txt path
+        # If runtime is provided, use runtime-specific requirements.txt
+        # Otherwise fall back to default static file
+        if requirements_path is None:
+            if runtime:
+                # Use runtime-specific path that will be generated
+                # This path is relative to the build context
+                use_gpu_suffix = "-gpu" if use_gpu_base else ""
+                requirements_path = f"data/python{use_gpu_suffix}/{runtime.version}_ubuntu2404-py{self.versions.python.replace('.', '')}/requirements.txt"
+            else:
+                # Fall back to static requirements file
+                requirements_path = "src/dbx_container/data/requirements.txt"
+
         instructions = [
             ArgInstruction(name="PYTHON_VERSION", default=f'"{self.versions.python}"'),
             ArgInstruction(name="PIP_VERSION", default=f'"{self.versions.pip}"'),
@@ -76,7 +109,7 @@ class PythonDockerfile(MinimalUbuntuDockerfile):
                 )
             ),
             RunInstruction(command="apt-get install -y libpq-dev build-essential"),
-            CopyInstruction(src="src/dbx_container/data/requirements.txt", dest="/databricks/."),
+            CopyInstruction(src=requirements_path, dest="/databricks/requirements.txt"),
             RunInstruction(command="/databricks/python3/bin/pip install --no-deps -r /databricks/requirements.txt"),
             CommentInstruction(comment="Specifies where Spark will look for the python process"),
             EnvInstruction(name="PYSPARK_PYTHON", value="/databricks/python3/bin/python3"),
@@ -89,10 +122,39 @@ class PythonDockerfile(MinimalUbuntuDockerfile):
             CopyInstruction(src="src/dbx_container/data/python-lsp-requirements.txt", dest="/databricks/."),
             RunInstruction(command="/databricks/python-lsp/bin/pip install -r /databricks/python-lsp-requirements.txt"),
         ]
+
+        # Add runtime metadata labels if runtime is provided
+        if runtime:
+            instructions.extend(
+                [
+                    CommentInstruction(comment="Runtime metadata"),
+                    LabelInstruction(key="databricks.runtime.version", value=str(runtime.version)),
+                    LabelInstruction(key="databricks.runtime.release_date", value=str(runtime.release_date)),
+                    LabelInstruction(
+                        key="databricks.runtime.end_of_support_date", value=str(runtime.end_of_support_date)
+                    ),
+                    LabelInstruction(key="databricks.runtime.spark_version", value=str(runtime.spark_version)),
+                    LabelInstruction(key="databricks.runtime.url", value=str(runtime.url)),
+                ]
+            )
+
         if instrs:
             instructions.extend(instrs)
-        super().__init__(base_image=base_image, instrs=instructions)
+        super().__init__(base_image=FromInstruction(base_image), instrs=instructions, registry=registry)
+
+    @property
+    def base_name(self) -> str:
+        """Return the base name without any variables."""
+        return "python"
+
+    @property
+    def depends_on(self) -> str | None:
+        """Return the base_name of the class this image depends on."""
+        return "standard"
 
     @property
     def image_name(self) -> str:
-        return "python" + self.versions.python
+        python_version = self.versions.python.replace(".", "")
+        runtime_version = self.runtime.version.replace(".", "").replace(" ", "-")
+        base = "python-gpu" if self.use_gpu_base else "python"
+        return f"{base}-py{python_version}-{runtime_version}"

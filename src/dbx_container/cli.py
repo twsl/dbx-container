@@ -41,9 +41,30 @@ def setup_build_command(subparsers) -> None:
         help="Specific image type to build. If not provided, builds all image types",
     )
     parser.add_argument(
+        "--registry",
+        type=str,
+        help="Registry prefix for image naming (e.g., 'ghcr.io/owner' or 'docker.io/username'). If not provided, uses local tags",
+    )
+    parser.add_argument(
         "--threads", type=int, default=5, help="Number of threads to use for runtime processing (default: 5)"
     )
     parser.add_argument("--no-verify-ssl", action="store_true", help="Disable SSL certificate verification")
+    parser.add_argument(
+        "--latest-lts-only",
+        action="store_true",
+        help="Build only the latest 3 LTS versions (default behavior)",
+    )
+    parser.add_argument(
+        "--all-lts",
+        action="store_true",
+        help="Build all LTS versions (overrides --latest-lts-only)",
+    )
+    parser.add_argument(
+        "--lts-count",
+        type=int,
+        default=3,
+        help="Number of latest LTS versions to build when --latest-lts-only is used (default: 3)",
+    )
     parser.set_defaults(func=run_build_dockerfiles)
 
 
@@ -62,8 +83,18 @@ def run_build_dockerfiles(args) -> Literal[1] | Literal[0]:
             )
         )
 
+        # Determine LTS filtering
+        lts_count = None if args.all_lts else args.lts_count
+        if not args.runtime_version and not args.all_lts:
+            logger.info(f"Building latest {args.lts_count} LTS versions only (use --all-lts for all LTS versions)")
+
         # Initialize the container engine
-        engine = RuntimeContainerEngine(data_dir=output_dir, max_workers=args.threads, verify_ssl=verify_ssl)
+        engine = RuntimeContainerEngine(
+            data_dir=output_dir,
+            max_workers=args.threads,
+            verify_ssl=verify_ssl,
+            latest_lts_count=lts_count,
+        )
 
         if args.runtime_version:
             logger.info(f"Building for specific runtime: {args.runtime_version}")
@@ -91,7 +122,7 @@ def run_build_dockerfiles(args) -> Literal[1] | Literal[0]:
 
                 with logger.status(f"[bold green]Generating {args.image_type} image..."):
                     dockerfile_content = engine.generate_dockerfile_for_image_type(
-                        target_runtime, args.image_type, config
+                        target_runtime, args.image_type, config, registry=args.registry
                     )
                     dockerfile_path = engine.save_dockerfile(dockerfile_content, target_runtime, args.image_type)
                     metadata_path = engine.save_runtime_metadata(target_runtime, args.image_type)
@@ -100,7 +131,7 @@ def run_build_dockerfiles(args) -> Literal[1] | Literal[0]:
                 logger.info(f"Generated metadata: {metadata_path}")
             else:
                 # Build all image types for specific runtime
-                generated_files = engine.build_all_images_for_runtime(target_runtime)
+                generated_files = engine.build_all_images_for_runtime(target_runtime, args.registry)
                 success_count = sum(1 for files in generated_files.values() if files)
                 logger.info(f"Generated {success_count}/{len(generated_files)} image types successfully")
         else:
@@ -119,7 +150,9 @@ def run_build_dockerfiles(args) -> Literal[1] | Literal[0]:
                 success_count = 0
                 for runtime in logger.progress(runtimes, description=f"Building {args.image_type} images"):
                     try:
-                        dockerfile_content = engine.generate_dockerfile_for_image_type(runtime, args.image_type, config)
+                        dockerfile_content = engine.generate_dockerfile_for_image_type(
+                            runtime, args.image_type, config, registry=args.registry
+                        )
                         engine.save_dockerfile(dockerfile_content, runtime, args.image_type)
                         engine.save_runtime_metadata(runtime, args.image_type)
                         success_count += 1
@@ -129,7 +162,7 @@ def run_build_dockerfiles(args) -> Literal[1] | Literal[0]:
                 logger.info(f"Completed: {success_count}/{len(runtimes)} runtimes")
             else:
                 # Build all image types for all runtimes
-                result = engine.run()
+                result = engine.run(args.registry)
                 total_runtimes = len(result)
 
                 # Display summary
@@ -179,6 +212,57 @@ def run_list_runtimes(args) -> Literal[1] | Literal[0]:
     return display_runtimes(verify_ssl=verify_ssl)
 
 
+def setup_generate_matrix_command(subparsers) -> None:
+    """Setup the generate matrix command."""
+    parser = subparsers.add_parser("generate-matrix", help="Generate GitHub Actions build matrix from build summary")
+    parser.add_argument(
+        "--output-dir", type=str, default="data", help="Directory containing build_summary.json (default: data)"
+    )
+    parser.add_argument(
+        "--only-lts",
+        action="store_true",
+        help="Only include LTS runtimes in the matrix",
+    )
+    parser.add_argument(
+        "--image-type",
+        type=str,
+        choices=["gpu"],
+        help="Specific image type to include in matrix (currently only 'gpu' is runtime-specific)",
+    )
+    parser.add_argument(
+        "--latest-lts-count",
+        type=int,
+        help="Only include the N latest LTS versions in the matrix",
+    )
+    parser.set_defaults(func=run_generate_matrix)
+
+
+def run_generate_matrix(args) -> Literal[1] | Literal[0]:
+    """Run the generate matrix command."""
+    import json
+
+    try:
+        output_dir = Path(args.output_dir)
+
+        # Initialize the container engine (we just need it for the method)
+        engine = RuntimeContainerEngine(data_dir=output_dir)
+
+        # Generate the matrix
+        matrix = engine.generate_build_matrix(
+            only_lts=args.only_lts,
+            image_type=args.image_type,
+            latest_lts_count=args.latest_lts_count,
+        )
+
+        # Output as JSON for GitHub Actions
+        print(json.dumps(matrix))
+    except Exception:
+        logger.exception("Error generating matrix")
+        return 1
+    else:
+        return 0
+
+
 def main() -> Literal[1] | Literal[0]:
     """Main entry point for the CLI."""
     parser = argparse.ArgumentParser(description=f"dbx-container v{__version__}")
@@ -189,6 +273,7 @@ def main() -> Literal[1] | Literal[0]:
     # Add commands
     setup_list_command(subparsers)
     setup_build_command(subparsers)
+    setup_generate_matrix_command(subparsers)
 
     # Parse arguments
     args = parser.parse_args()
@@ -198,8 +283,9 @@ def main() -> Literal[1] | Literal[0]:
         text = Text(f"dbx-container v{__version__}", style="bold blue")
         logger.print(text)
         logger.print("\nAvailable commands:")
-        logger.print("  list   - List all available Databricks runtimes")
-        logger.print("  build  - Build Dockerfiles for Databricks runtimes")
+        logger.print("  list            - List all available Databricks runtimes")
+        logger.print("  build           - Build Dockerfiles for Databricks runtimes")
+        logger.print("  generate-matrix - Generate GitHub Actions build matrix")
         logger.print("Use 'dbx-container <command> --help' for more information about a command.")
         return 0
     else:

@@ -1,0 +1,395 @@
+---
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      runtime_version:
+        description: 'Specific runtime version to build (e.g., "16.4 LTS"). Leave empty to build all LTS runtimes.'
+        required: false
+        type: string
+      image_type:
+        description: 'Image type: "all" builds CPU (minimal/python/dbfsfuse/standard) + GPU images, "cpu" builds CPU-only, "gpu" builds CPU + GPU (GPU needs CPU chain)'
+        required: false
+        type: choice
+        options:
+          - all
+          - cpu
+          - gpu
+        default: all
+      all_lts:
+        description: 'Build all LTS versions (default: latest 3 LTS only)'
+        required: false
+        type: boolean
+        default: false
+      lts_count:
+        description: 'Number of latest LTS versions to build (default: 3)'
+        required: false
+        type: number
+        default: 3
+      push_images:
+        description: 'Push images to registry'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/dbx-runtime
+
+jobs:
+  generate-dockerfiles:
+    name: Generate Dockerfiles
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_gpu_images: ${{ steps.check-images.outputs.has_gpu }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Generate Dockerfiles
+        run: |
+          if [ -n "${{ github.event.inputs.runtime_version }}" ]; then
+            poetry run dbx-container build \
+              --output-dir data \
+              --runtime-version "${{ github.event.inputs.runtime_version }}" \
+              ${{ (github.event.inputs.image_type == 'gpu' || github.event.inputs.image_type == 'all') && '--image-type gpu' || '' }}
+          else
+            BUILD_CMD="poetry run dbx-container build --output-dir data"
+            if [ "${{ github.event.inputs.all_lts }}" = "true" ]; then
+              BUILD_CMD="$BUILD_CMD --all-lts"
+            elif [ -n "${{ github.event.inputs.lts_count }}" ]; then
+              BUILD_CMD="$BUILD_CMD --lts-count ${{ github.event.inputs.lts_count }}"
+            fi
+            if [ "${{ github.event.inputs.image_type }}" = "gpu" ] || [ "${{ github.event.inputs.image_type }}" = "all" ]; then
+              BUILD_CMD="$BUILD_CMD --image-type gpu"
+            fi
+            eval $BUILD_CMD
+          fi
+
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          MATRIX_CMD="poetry run dbx-container generate-matrix --only-lts"
+          if [ "${{ github.event.inputs.image_type }}" = "gpu" ] || [ "${{ github.event.inputs.image_type }}" = "all" ]; then
+            MATRIX_CMD="$MATRIX_CMD --image-type gpu"
+          fi
+          if [ -n "${{ github.event.inputs.lts_count }}" ] && [ "${{ github.event.inputs.all_lts }}" != "true" ]; then
+            MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
+          fi
+          MATRIX_JSON=$(eval $MATRIX_CMD)
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: Check for GPU images
+        id: check-images
+        run: |
+          if [ -d "data/gpu" ] && [ "$(ls -A data/gpu 2>/dev/null)" ]; then
+            echo "has_gpu=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_gpu=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Dockerfiles
+        uses: actions/upload-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+          retention-days: 7
+
+  # Build minimal image (base image for all variants)
+  build-minimal:
+    name: Build minimal
+    needs: generate-dockerfiles
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push minimal image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/minimal/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:minimal
+            dbx-runtime:minimal
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=minimal
+          cache-to: type=gha,mode=max,scope=minimal
+          outputs: type=docker
+
+  # Build python image (depends on minimal)
+  build-python:
+    name: Build python
+    needs: [generate-dockerfiles, build-minimal]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push python image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/python/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:python
+            dbx-runtime:python
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=python
+          cache-to: type=gha,mode=max,scope=python
+          outputs: type=docker
+
+  # Build dbfsfuse image (depends on python)
+  build-dbfsfuse:
+    name: Build dbfsfuse
+    needs: [generate-dockerfiles, build-python]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push dbfsfuse image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/dbfsfuse/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:dbfsfuse
+            dbx-runtime:dbfsfuse
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=dbfsfuse
+          cache-to: type=gha,mode=max,scope=dbfsfuse
+          outputs: type=docker
+
+  # Build standard image (depends on dbfsfuse)
+  build-standard:
+    name: Build standard
+    needs: [generate-dockerfiles, build-dbfsfuse]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          METADATA_PATH="data/standard/latest/runtime_metadata.json"
+          RUNTIME_VERSION=$(jq -r '.reference_runtime_version // "latest"' "$METADATA_PATH")
+          # Replace spaces with dashes for valid Docker tags
+          RUNTIME_TAG=$(echo "$RUNTIME_VERSION" | tr ' ' '-')
+          echo "runtime_tag=$RUNTIME_TAG" >> $GITHUB_OUTPUT
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push standard image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/standard/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard-${{ steps.meta.outputs.runtime_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard
+            dbx-runtime:standard-${{ steps.meta.outputs.runtime_tag }}
+            dbx-runtime:standard
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=standard
+          cache-to: type=gha,mode=max,scope=standard
+          outputs: type=docker
+
+  # Build runtime-specific GPU images using matrix (depends on standard for base image)
+  build-gpu-images:
+    name: Build GPU ${{ matrix.runtime }}${{ matrix.variant }}
+    needs: [generate-dockerfiles, build-standard]
+    if: needs.generate-dockerfiles.outputs.has_gpu_images == 'true' && github.event.inputs.image_type != 'cpu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-dockerfiles.outputs.matrix) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          DOCKERFILE_PATH="data/${{ matrix.image_type }}/${{ matrix.runtime }}${{ matrix.suffix }}/Dockerfile${{ matrix.variant }}"
+          METADATA_PATH="data/${{ matrix.image_type }}/${{ matrix.runtime }}${{ matrix.suffix }}/runtime_metadata${{ matrix.variant }}.json"
+          
+          # Extract version info from metadata
+          PYTHON_VERSION=$(jq -r '.python_version // "3.12"' "$METADATA_PATH")
+          RUNTIME_VERSION="${{ matrix.runtime }}"
+          
+          # Create image tag
+          IMAGE_TAG="${{ matrix.image_type }}-${RUNTIME_VERSION}${{ matrix.variant }}"
+          # Replace spaces with dashes for valid Docker tags
+          IMAGE_TAG=$(echo "$IMAGE_TAG" | tr ' ' '-')
+          
+          echo "dockerfile_path=$DOCKERFILE_PATH" >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "python_version=$PYTHON_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build and push GPU image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ steps.meta.outputs.dockerfile_path }}
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ steps.meta.outputs.image_tag }}
+            dbx-runtime:${{ steps.meta.outputs.image_tag }}
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.title=Databricks ${{ matrix.runtime }}${{ matrix.variant }} GPU Runtime
+            org.opencontainers.image.description=Databricks Runtime ${{ matrix.runtime }}${{ matrix.variant }} with GPU support
+          cache-from: type=gha,scope=${{ matrix.image_type }}-${{ matrix.runtime }}${{ matrix.variant }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image_type }}-${{ matrix.runtime }}${{ matrix.variant }}
+          outputs: type=docker

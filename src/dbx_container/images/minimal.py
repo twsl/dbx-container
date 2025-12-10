@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from dbx_container.docker.builder import DockerfileBuilder, DockerInstruction
 from dbx_container.docker.instructions import (
     ArgInstruction,
@@ -5,12 +7,36 @@ from dbx_container.docker.instructions import (
     EnvInstruction,
     FromInstruction,
     RunInstruction,
-    UserInstruction,
 )
 
 
 class MinimalUbuntuDockerfile(DockerfileBuilder):
-    def __init__(self, base_image: str = "ubuntu:24.04", instrs: list[DockerInstruction] | None = None) -> None:
+    """Minimal Ubuntu 24.04 LTS container with Java (JDK 8 and 17).
+
+    Can be built on top of NVIDIA CUDA base image for GPU variant.
+    """
+
+    def __init__(
+        self,
+        base_image: str | None = None,
+        instrs: list[DockerInstruction] | None = None,
+        registry: str | None = None,
+        use_gpu_base: bool = False,
+        cuda_version: str = "12.8.1",
+        ubuntu_version: str = "24.04",
+    ) -> None:
+        self.use_gpu_base = use_gpu_base
+
+        # Determine base image
+        if base_image is None:
+            if use_gpu_base:
+                # Use NVIDIA CUDA image for GPU variant
+                ubuntu_tag = ubuntu_version.replace(".", "")
+                base_image = f"nvidia/cuda:{cuda_version}-cudnn-runtime-ubuntu{ubuntu_tag}"
+            else:
+                # Use standard Ubuntu image
+                base_image = "ubuntu:24.04"
+
         instructions = [
             EnvInstruction(name="LANG", value="C.UTF-8"),
             EnvInstruction(name="LC_ALL", value="C.UTF-8"),
@@ -61,10 +87,21 @@ class MinimalUbuntuDockerfile(DockerfileBuilder):
             CommentInstruction(comment="Add new user for cluster library installation"),
             RunInstruction(command="useradd libraries && usermod -L libraries"),
         ]
+
         if instrs:
             instructions.extend(instrs)
-        super().__init__(base_image=FromInstruction(base_image), instrs=instructions)
+        super().__init__(base_image=FromInstruction(base_image), instrs=instructions, registry=registry)
+
+    @property
+    def base_name(self) -> str:
+        """Return the base name without any variables."""
+        return "minimal"
+
+    @property
+    def depends_on(self) -> str | None:
+        """Return the base_name of the class this image depends on."""
+        return None  # Base image has no dependencies
 
     @property
     def image_name(self) -> str:
-        return "minimal"
+        return "minimal-gpu" if self.use_gpu_base else "minimal"

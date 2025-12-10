@@ -1,14 +1,17 @@
-from dbx_container.docker.builder import DockerInstruction
+from dbx_container.docker.builder import DockerfileBuilder, DockerInstruction
 from dbx_container.docker.instructions import (
     CommentInstruction,
     EnvInstruction,
+    FromInstruction,
     RunInstruction,
 )
-from dbx_container.images.minimal import MinimalUbuntuDockerfile
+from dbx_container.images.python import PythonDockerfileVersions
 
 
-class GpuDockerfile(MinimalUbuntuDockerfile):
-    """GPU-enabled Databricks container image with CUDA 11.8 support.
+class GpuDockerfile(DockerfileBuilder):
+    """GPU-enabled Databricks container image using official NVIDIA CUDA base image.
+
+    Uses official NVIDIA CUDA images in the format: cuda_version-cudnn-runtime-ubuntu_version
 
     Note:
         Reference: https://github.com/databricks/containers/blob/master/ubuntu/gpu/cuda-11.8/base/Dockerfile
@@ -16,27 +19,33 @@ class GpuDockerfile(MinimalUbuntuDockerfile):
 
     def __init__(
         self,
-        cuda_version: str = "11.8.0",
-        cudnn_version: str = "8",
-        base_image: str = "ubuntu:22.04",  # TODO: Update to 24.04
+        cuda_version: str = "12.8.1",  # make compatible with default Linux CUDA version https://pytorch.org/get-started/locally/
+        ubuntu_version: str = "24.04",
+        versions: PythonDockerfileVersions | None = None,
         instrs: list[DockerInstruction] | None = None,
+        registry: str | None = None,
     ) -> None:
         self.cuda_version = cuda_version
-        self.cudnn_version = cudnn_version
-        base_image = f"nvidia/cuda:{cuda_version}-cudnn{cudnn_version}-runtime-{base_image.replace(':', '')}"
+        self.ubuntu_version = ubuntu_version
+        self.versions = versions or PythonDockerfileVersions()
+
+        # Construct the official NVIDIA CUDA base image name
+        # Format: cuda_version-cudnn-runtime-ubuntu_version
+        # Example: 12.8.1-cudnn-runtime-ubuntu24.04
+        ubuntu_tag = ubuntu_version.replace(".", "")
+        base_image_name = f"nvidia/cuda:{cuda_version}-cudnn-runtime-ubuntu{ubuntu_tag}"
+
         # Instructions specific to the GPU image
         gpu_instructions = [
-            CommentInstruction(comment="Disable NVIDIA repos to prevent accidental upgrades"),
-            RunInstruction(
-                command=(
-                    f"cd /etc/apt/sources.list.d && mv cuda-{base_image.replace(':', '')}-x86_64.list cuda-{base_image.replace(':', '')}-x86_64.list.disabled"
-                )
-            ),
+            CommentInstruction(comment="Using official NVIDIA CUDA base image"),
+            CommentInstruction(comment=f"CUDA {cuda_version}, Ubuntu {ubuntu_version}"),
+            EnvInstruction(name="NVIDIA_VISIBLE_DEVICES", value="all"),
+            EnvInstruction(name="NVIDIA_DRIVER_CAPABILITIES", value="compute,utility"),
             CommentInstruction(
                 comment="Install R since command `R` is required for setting up driver on cluster creation"
             ),
             CommentInstruction(
-                comment="See https://github.com/databricks/containers/blob/14042896b64285948300ed2d88a59eda87bb2a4d/ubuntu/R/Dockerfile#L16-L29"
+                comment="See https://github.com/databricks/containers/blob/5cb1057f74dce823d4997b727087d0317deb325d/ubuntu/R/Dockerfile#L16-L31"
             ),
             EnvInstruction(name="DEBIAN_FRONTEND", value="noninteractive"),
             RunInstruction(
@@ -54,17 +63,24 @@ class GpuDockerfile(MinimalUbuntuDockerfile):
                     "rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*"
                 )
             ),
-            CommentInstruction(comment="Add new user for cluster library installation"),
-            RunInstruction(command="useradd libraries && usermod -L libraries"),
         ]
 
         # Combine with any additional instructions passed in
         if instrs:
             gpu_instructions.extend(instrs)
 
-        # Initialize the parent minimal dockerfile with our additional instructions
-        super().__init__(base_image=base_image, instrs=gpu_instructions)
+        super().__init__(base_image=FromInstruction(base_image_name), instrs=gpu_instructions, registry=registry)
+
+    @property
+    def base_name(self) -> str:
+        """Return the base name without any variables."""
+        return "gpu"
+
+    @property
+    def depends_on(self) -> str | None:
+        """Return the base_name of the class this image depends on."""
+        return None  # GPU uses official NVIDIA base image, not our internal images
 
     @property
     def image_name(self) -> str:
-        return "gpu" + self.cuda_version
+        return "gpu"

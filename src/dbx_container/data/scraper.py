@@ -108,7 +108,7 @@ class RuntimeScraper:
                     end_of_support_date=end_of_support_date_parsed,
                     spark_version=spark_version,
                     url=urls[0],
-                    ml_url=urls[1],
+                    ml_url=urls[1] if len(urls) > 1 else "",
                 )
                 releases.append(release)
         except Exception:
@@ -273,9 +273,10 @@ class RuntimeScraper:
             runtime = self._parse_runtime_page(release, release.url)
             if runtime is not None:
                 runtimes.append(runtime)
-                ml_runtime = self._parse_ml_runtime_page(release, release.ml_url, runtime)
-                if ml_runtime is not None:
-                    runtimes.append(ml_runtime)
+                if release.ml_url:
+                    ml_runtime = self._parse_ml_runtime_page(release, release.ml_url, runtime)
+                    if ml_runtime is not None:
+                        runtimes.append(ml_runtime)
         except Exception:
             self.logger.exception(f"Error parsing runtime page {release.version}")
         return runtimes

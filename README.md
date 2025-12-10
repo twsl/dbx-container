@@ -18,7 +18,12 @@ Docker images are based on the [container definitions](https://github.com/databr
 
 ## Features
 
--   `...`
+- Generate Dockerfiles for all Databricks runtime versions
+- Support for multiple image types: minimal, python, dbfsfuse, standard, gpu
+- LTS runtime support with ML variants
+- Automated CI/CD pipeline for building and publishing images
+- Multiple OS and Python version variations
+- Built-in runtime metadata and version tracking
 
 ## Installation
 
@@ -36,11 +41,82 @@ poetry add dbx-container
 
 ## How to use it
 
-```python
-import dbx_container
+### Generate Dockerfiles
 
-...
+Generate Dockerfiles for all Databricks runtimes:
+
+```bash
+poetry run dbx-container build
 ```
+
+Generate for a specific runtime:
+
+```bash
+poetry run dbx-container build --runtime-version "14.3 LTS"
+```
+
+Generate for a specific image type:
+
+```bash
+poetry run dbx-container build --image-type gpu
+```
+
+### List Available Runtimes
+
+View all supported Databricks runtime versions:
+
+```bash
+poetry run dbx-container list
+```
+
+### Build Docker Images
+
+Build all LTS images locally:
+
+```bash
+./scripts/build_images.sh
+```
+
+Build and push to a registry:
+
+```bash
+./scripts/build_images.sh --push --registry ghcr.io
+```
+
+### Use Pre-built Images
+
+Pull from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/twsl/dbx-runtime-python:14.3-lts
+docker pull ghcr.io/twsl/dbx-runtime-gpu:16.4-lts-ml
+```
+
+## Available Image Types
+
+- **minimal** - Base Ubuntu with Java (non-runtime-specific)
+- **python** - Python runtime with virtualenv (LTS versions)
+- **dbfsfuse** - Python with DBFS FUSE support (non-runtime-specific)
+- **standard** - Standard with SSH server (non-runtime-specific)
+- **gpu** - GPU-enabled with CUDA support (LTS versions)
+
+Each LTS runtime includes:
+
+- Base variant (standard runtime)
+- ML variant (machine learning runtime)
+- Multiple OS versions (Ubuntu 22.04, 24.04)
+- Appropriate Python versions (3.8-3.12)
+
+## CI/CD Pipeline
+
+The project includes a GitHub Actions workflow that:
+
+1. Automatically generates Dockerfiles for all LTS runtimes
+2. Builds images in parallel using matrix strategy
+3. Pushes to GitHub Container Registry on main branch
+4. Supports manual triggering with filters
+
+See [Docker Build Guide](docs/docs/docker-build.md) for detailed documentation.
 
 ## Docs
 
