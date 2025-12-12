@@ -209,6 +209,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           provenance: false
+          sbom: false
           cache-from: type=gha,scope=minimal
           cache-to: type=gha,mode=max,scope=minimal
 
@@ -312,6 +313,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           provenance: false
+          sbom: false
           cache-from: type=gha,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
 
@@ -360,6 +362,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           provenance: false
+          sbom: false
           cache-from: type=gha,scope=standard
           cache-to: type=gha,mode=max,scope=standard
 
@@ -408,6 +411,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           provenance: false
+          sbom: false
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu
 
@@ -456,6 +460,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           provenance: false
+          sbom: false
           cache-from: type=gha,scope=minimal-gpu
           cache-to: type=gha,mode=max,scope=minimal-gpu
 
@@ -504,6 +509,7 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           provenance: false
+          sbom: false
           cache-from: type=gha,scope=standard-gpu
           cache-to: type=gha,mode=max,scope=standard-gpu
 
