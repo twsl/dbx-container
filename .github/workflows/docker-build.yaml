@@ -15,7 +15,7 @@ on:
         required: false
         type: string
       image_type:
-        description: 'Image type: "all" builds CPU (minimal/python/dbfsfuse/standard) + GPU images, "cpu" builds CPU-only, "gpu" builds CPU + GPU (GPU needs CPU chain)'
+        description: 'Image type: "all" builds all images (minimal/standard/python + GPU variants), "cpu" builds CPU-only, "gpu" builds GPU images only'
         required: false
         type: choice
         options:
@@ -24,15 +24,24 @@ on:
           - gpu
         default: all
       all_lts:
-        description: 'Build all LTS versions (default: latest 3 LTS only)'
+        description: 'Build all LTS versions (default: latest 2 LTS only)'
         required: false
         type: boolean
         default: false
       lts_count:
-        description: 'Number of latest LTS versions to build (default: 3)'
+        description: 'Number of latest LTS versions to build (default: 2)'
         required: false
         type: number
-        default: 3
+        default: 2
+      force_ubuntu_version:
+        description: 'Force specific Ubuntu version for base images (e.g., "22.04" or "24.04")'
+        required: false
+        type: string
+      include_ml_variants:
+        description: 'Include ML runtime variants (default: false)'
+        required: false
+        type: boolean
+        default: false
       push_images:
         description: 'Push images to registry'
         required: false
@@ -75,30 +84,48 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
+          BUILD_CMD="poetry run dbx-container build --output-dir data"
+          
+          # Runtime version filter
           if [ -n "${{ github.event.inputs.runtime_version }}" ]; then
-            poetry run dbx-container build \
-              --output-dir data \
-              --runtime-version "${{ github.event.inputs.runtime_version }}" \
-              ${{ (github.event.inputs.image_type == 'gpu' || github.event.inputs.image_type == 'all') && '--image-type gpu' || '' }}
-          else
-            BUILD_CMD="poetry run dbx-container build --output-dir data"
-            if [ "${{ github.event.inputs.all_lts }}" = "true" ]; then
-              BUILD_CMD="$BUILD_CMD --all-lts"
-            elif [ -n "${{ github.event.inputs.lts_count }}" ]; then
-              BUILD_CMD="$BUILD_CMD --lts-count ${{ github.event.inputs.lts_count }}"
-            fi
-            if [ "${{ github.event.inputs.image_type }}" = "gpu" ] || [ "${{ github.event.inputs.image_type }}" = "all" ]; then
-              BUILD_CMD="$BUILD_CMD --image-type gpu"
-            fi
-            eval $BUILD_CMD
+            BUILD_CMD="$BUILD_CMD --runtime-version '${{ github.event.inputs.runtime_version }}'"
           fi
+          
+          # LTS filtering
+          if [ "${{ github.event.inputs.all_lts }}" = "true" ]; then
+            BUILD_CMD="$BUILD_CMD --all-lts"
+          elif [ -n "${{ github.event.inputs.lts_count }}" ]; then
+            BUILD_CMD="$BUILD_CMD --lts-count ${{ github.event.inputs.lts_count }}"
+          fi
+          
+          # Image type filter
+          if [ "${{ github.event.inputs.image_type }}" = "gpu" ]; then
+            BUILD_CMD="$BUILD_CMD --image-type gpu"
+          fi
+          
+          # Ubuntu version
+          if [ -n "${{ github.event.inputs.force_ubuntu_version }}" ]; then
+            BUILD_CMD="$BUILD_CMD --force-ubuntu-version '${{ github.event.inputs.force_ubuntu_version }}'"
+          fi
+          
+          # ML variants
+          if [ "${{ github.event.inputs.include_ml_variants }}" = "true" ]; then
+            BUILD_CMD="$BUILD_CMD --include-ml-variants"
+          fi
+          
+          eval $BUILD_CMD
 
       - name: Generate build matrix
         id: set-matrix
         run: |
           MATRIX_CMD="poetry run dbx-container generate-matrix --only-lts"
+          # Note: matrix generation is currently disabled as we build all images directly
+          # This can be re-enabled if runtime-specific variations are needed
+          # The matrix would handle python/python-gpu/standard/standard-gpu with different versions
           if [ "${{ github.event.inputs.image_type }}" = "gpu" ] || [ "${{ github.event.inputs.image_type }}" = "all" ]; then
-            MATRIX_CMD="$MATRIX_CMD --image-type gpu"
+            MATRIX_CMD="$MATRIX_CMD --image-type python-gpu"
+          elif [ "${{ github.event.inputs.image_type }}" = "cpu" ]; then
+            MATRIX_CMD="$MATRIX_CMD --image-type python"
           fi
           if [ -n "${{ github.event.inputs.lts_count }}" ] && [ "${{ github.event.inputs.all_lts }}" != "true" ]; then
             MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
@@ -169,10 +196,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=minimal
           outputs: type=docker
 
-  # Build python image (depends on minimal)
+  # Build python image (depends on standard)
   build-python:
     name: Build python
-    needs: [generate-dockerfiles, build-minimal]
+    needs: [generate-dockerfiles, build-standard]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -216,57 +243,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=python
           outputs: type=docker
 
-  # Build dbfsfuse image (depends on python)
-  build-dbfsfuse:
-    name: Build dbfsfuse
-    needs: [generate-dockerfiles, build-python]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Download Dockerfiles
-        uses: actions/download-artifact@v5
-        with:
-          name: dockerfiles
-          path: data/
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push dbfsfuse image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: data/dbfsfuse/latest/Dockerfile
-          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:dbfsfuse
-            dbx-runtime:dbfsfuse
-          labels: |
-            org.opencontainers.image.source=${{ github.event.repository.html_url }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha,scope=dbfsfuse
-          cache-to: type=gha,mode=max,scope=dbfsfuse
-          outputs: type=docker
-
-  # Build standard image (depends on dbfsfuse)
+  # Build standard image (depends on minimal)
   build-standard:
     name: Build standard
-    needs: [generate-dockerfiles, build-dbfsfuse]
+    needs: [generate-dockerfiles, build-minimal]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -284,15 +264,6 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Extract metadata
-        id: meta
-        run: |
-          METADATA_PATH="data/standard/latest/runtime_metadata.json"
-          RUNTIME_VERSION=$(jq -r '.reference_runtime_version // "latest"' "$METADATA_PATH")
-          # Replace spaces with dashes for valid Docker tags
-          RUNTIME_TAG=$(echo "$RUNTIME_VERSION" | tr ' ' '-')
-          echo "runtime_tag=$RUNTIME_TAG" >> $GITHUB_OUTPUT
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
@@ -309,9 +280,7 @@ jobs:
           file: data/standard/latest/Dockerfile
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard-${{ steps.meta.outputs.runtime_tag }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard
-            dbx-runtime:standard-${{ steps.meta.outputs.runtime_tag }}
             dbx-runtime:standard
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
@@ -321,19 +290,15 @@ jobs:
           cache-to: type=gha,mode=max,scope=standard
           outputs: type=docker
 
-  # Build runtime-specific GPU images using matrix (depends on standard for base image)
-  build-gpu-images:
-    name: Build GPU ${{ matrix.runtime }}${{ matrix.variant }}
-    needs: [generate-dockerfiles, build-standard]
-    if: needs.generate-dockerfiles.outputs.has_gpu_images == 'true' && github.event.inputs.image_type != 'cpu'
+  # Build GPU base image
+  build-gpu:
+    name: Build GPU base
+    needs: generate-dockerfiles
+    if: github.event.inputs.image_type != 'cpu'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate-dockerfiles.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -356,40 +321,163 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        run: |
-          DOCKERFILE_PATH="data/${{ matrix.image_type }}/${{ matrix.runtime }}${{ matrix.suffix }}/Dockerfile${{ matrix.variant }}"
-          METADATA_PATH="data/${{ matrix.image_type }}/${{ matrix.runtime }}${{ matrix.suffix }}/runtime_metadata${{ matrix.variant }}.json"
-          
-          # Extract version info from metadata
-          PYTHON_VERSION=$(jq -r '.python_version // "3.12"' "$METADATA_PATH")
-          RUNTIME_VERSION="${{ matrix.runtime }}"
-          
-          # Create image tag
-          IMAGE_TAG="${{ matrix.image_type }}-${RUNTIME_VERSION}${{ matrix.variant }}"
-          # Replace spaces with dashes for valid Docker tags
-          IMAGE_TAG=$(echo "$IMAGE_TAG" | tr ' ' '-')
-          
-          echo "dockerfile_path=$DOCKERFILE_PATH" >> $GITHUB_OUTPUT
-          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
-          echo "python_version=$PYTHON_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Build and push GPU image
+      - name: Build and push GPU base image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ steps.meta.outputs.dockerfile_path }}
+          file: data/gpu/latest/Dockerfile
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ steps.meta.outputs.image_tag }}
-            dbx-runtime:${{ steps.meta.outputs.image_tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:gpu
+            dbx-runtime:gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-            org.opencontainers.image.title=Databricks ${{ matrix.runtime }}${{ matrix.variant }} GPU Runtime
-            org.opencontainers.image.description=Databricks Runtime ${{ matrix.runtime }}${{ matrix.variant }} with GPU support
-          cache-from: type=gha,scope=${{ matrix.image_type }}-${{ matrix.runtime }}${{ matrix.variant }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image_type }}-${{ matrix.runtime }}${{ matrix.variant }}
+          cache-from: type=gha,scope=gpu
+          cache-to: type=gha,mode=max,scope=gpu
+          outputs: type=docker
+
+  # Build minimal-gpu (depends on gpu base)
+  build-minimal-gpu:
+    name: Build minimal-gpu
+    needs: [generate-dockerfiles, build-gpu]
+    if: github.event.inputs.image_type != 'cpu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push minimal-gpu image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/minimal-gpu/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:minimal-gpu
+            dbx-runtime:minimal-gpu
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=minimal-gpu
+          cache-to: type=gha,mode=max,scope=minimal-gpu
+          outputs: type=docker
+
+  # Build standard-gpu (depends on minimal-gpu)
+  build-standard-gpu:
+    name: Build standard-gpu
+    needs: [generate-dockerfiles, build-minimal-gpu]
+    if: github.event.inputs.image_type != 'cpu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push standard-gpu image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/standard-gpu/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard-gpu
+            dbx-runtime:standard-gpu
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=standard-gpu
+          cache-to: type=gha,mode=max,scope=standard-gpu
+          outputs: type=docker
+
+  # Build python-gpu (depends on standard-gpu)
+  build-python-gpu:
+    name: Build python-gpu
+    needs: [generate-dockerfiles, build-standard-gpu]
+    if: github.event.inputs.image_type != 'cpu'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download Dockerfiles
+        uses: actions/download-artifact@v5
+        with:
+          name: dockerfiles
+          path: data/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push python-gpu image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: data/python-gpu/latest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:python-gpu
+            dbx-runtime:python-gpu
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha,scope=python-gpu
+          cache-to: type=gha,mode=max,scope=python-gpu
           outputs: type=docker

@@ -170,11 +170,17 @@ class RuntimeScraper:
         # Try different section identifiers
         section_identifiers = {
             "installed-python-libraries": "python",
+            "python-libraries": "python",  # For ML runtimes
+            "python-libraries-on-cpu-clusters": "python",  # Alternative for ML runtimes
             "installed-r-libraries": "r",
+            "r-libraries": "r",  # For ML runtimes
         }
 
-        # First try finding by ID
+        # First try finding by ID - only parse each language once
+        parsed_languages = set()
         for id_name, lang in section_identifiers.items():
+            if lang in parsed_languages:
+                continue
             libraries[lang] = {}
             if section := soup.find(id=id_name):
                 table = section.find_next("table")
@@ -196,6 +202,9 @@ class RuntimeScraper:
                         version = cells[(i * 2) + 1].get_text().strip()
                         if library:
                             libraries[lang][library] = version
+
+                # Mark this language as parsed
+                parsed_languages.add(lang)
 
         return libraries
 
@@ -250,7 +259,9 @@ class RuntimeScraper:
         is_lts = "lts" in url
         soup = BeautifulSoup(content, "lxml")
 
-        included_libraries = runtime_base.included_libraries
+        # Parse ML-specific libraries (includes ML Python packages)
+        included_libraries = self._parse_included_libraries(soup)
+        # Add GPU libraries specific to ML runtime
         included_libraries["gpu"] = self._parse_gpu_libraries(soup)  # pyright: ignore[reportArgumentType]
 
         runtime = Runtime(

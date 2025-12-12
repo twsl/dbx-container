@@ -18,60 +18,53 @@ The project provides two parallel dependency chains:
    - Azul Zulu JDK 8 and 17
    - Tag format: `dbx-runtime:minimal`
 
-2. **python** - Python-enabled container with virtualenv support
+2. **standard** - Standard container with FUSE and SSH server support
 
    - Extends minimal image
+   - FUSE filesystem support
+   - SSH server for remote access
+   - Tag format: `dbx-runtime:standard`
+
+3. **python** - Python-enabled container with virtualenv support
+
+   - Extends standard image
    - Python installation with pip, setuptools, wheel
    - virtualenv for isolated environments
    - Common Python libraries for Databricks
    - Runtime metadata labels
-   - Tag format: `dbx-runtime:python-py{version}` (e.g., `python-py312`)
-
-3. **dbfsfuse** - Python container with DBFS FUSE capabilities
-
-   - Extends python image
-   - DBFS filesystem mounting support
-   - Tag format: `dbx-runtime:dbfsfuse-py{version}`
-
-4. **standard** - Standard container with SSH server support
-   - Extends dbfsfuse image
-   - SSH server for remote access
-   - Tag format: `dbx-runtime:standard-py{version}`
+   - Tag format: `dbx-runtime:python-{runtime}`
 
 **GPU Chain** (NVIDIA CUDA-based):
 
-1. **minimal-gpu** - GPU-enabled minimal container
+1. **gpu** - Base GPU-enabled container
 
-   - Based on NVIDIA CUDA base images
-   - Includes Java support
+   - Based directly on NVIDIA CUDA images
+   - Includes R support for driver setup
+   - Tag format: `dbx-runtime:gpu`
+
+2. **minimal-gpu** - GPU-enabled minimal container
+
+   - Extends gpu image
+   - Includes Java support (JDK 8 and 17)
    - Tag format: `dbx-runtime:minimal-gpu`
 
-2. **python-gpu** - GPU Python container
+3. **standard-gpu** - GPU standard container with FUSE and SSH
 
    - Extends minimal-gpu
+   - FUSE filesystem support
+   - SSH server for remote access
+   - Tag format: `dbx-runtime:standard-gpu`
+
+4. **python-gpu** - GPU Python container
+
+   - Extends standard-gpu
    - CUDA-enabled Python environment
    - Runtime metadata labels
-   - Tag format: `dbx-runtime:python-gpu-py{version}`
-
-3. **dbfsfuse-gpu** - GPU DBFS FUSE container
-
-   - Extends python-gpu
-   - Tag format: `dbx-runtime:dbfsfuse-gpu-py{version}`
-
-4. **standard-gpu** - GPU standard container
-   - Extends dbfsfuse-gpu
-   - Tag format: `dbx-runtime:standard-gpu-py{version}`
-
-**Standalone**: 5. **gpu** - Standalone GPU-enabled container
-
-- Based directly on NVIDIA CUDA images
-- R environment for GPU workloads
-- Runtime-specific (per LTS version)
-- Separate from standard/GPU chains
+   - Tag format: `dbx-runtime:python-gpu-{runtime}`
 
 ### Runtime Variations
 
-For runtime-specific images (python and gpu), the following variations are generated for each LTS runtime:
+For runtime-specific images (python and python-gpu), the following variations are generated for each LTS runtime:
 
 - **Base variant**: Standard Databricks runtime
 - **ML variant**: Machine Learning runtime with additional ML libraries
@@ -91,7 +84,7 @@ poetry run dbx-container build --output-dir data
 Generate for a specific runtime:
 
 ```bash
-poetry run dbx-container build --runtime-version "14.3 LTS" --output-dir data
+poetry run dbx-container build --runtime-version "15.4 LTS" --output-dir data
 ```
 
 Generate for a specific image type:
@@ -122,14 +115,6 @@ data/
 │   └── latest/
 │       ├── Dockerfile
 │       └── runtime_metadata.json
-├── dbfsfuse/
-│   └── latest/
-│       ├── Dockerfile
-│       └── runtime_metadata.json
-├── dbfsfuse-gpu/
-│   └── latest/
-│       ├── Dockerfile
-│       └── runtime_metadata.json
 ├── standard/
 │   └── latest/
 │       ├── Dockerfile
@@ -139,10 +124,8 @@ data/
 │       ├── Dockerfile
 │       └── runtime_metadata.json
 └── gpu/
-    ├── 14.3 LTS_ubuntu2204-py310/
-    │   ├── Dockerfile
-    │   ├── Dockerfile.ml
-    │   ├── runtime_metadata.json
+    └── latest/
+        └── Dockerfile
     │   └── runtime_metadata.ml.json
     └── 16.4 LTS_ubuntu2404-py312/
         └── ...
@@ -161,7 +144,7 @@ Build all LTS images locally:
 Build a specific runtime:
 
 ```bash
-./scripts/build_images.sh --runtime "14.3 LTS"
+./scripts/build_images.sh --runtime "15.4 LTS"
 ```
 
 Build a specific image type:
@@ -193,14 +176,16 @@ docker build -f data/python/latest/Dockerfile -t dbx-runtime:python-py312 .
 # Build GPU Python image
 docker build -f data/python-gpu/latest/Dockerfile -t dbx-runtime:python-gpu-py312 .
 
+# Build Python runtime 17.3 LTS
+docker build -f data/python/17.3-LTS-ubuntu2404-py312/Dockerfile -t dbx-runtime:python-17.3-lts-ubuntu2404-py312 .
+
 # Build GPU runtime 16.4 LTS ML variant
-docker build -f data/gpu/16.4\ LTS_ubuntu2404-py312/Dockerfile.ml -t dbx-runtime-gpu:16.4-lts-ml .
+docker build -f data/python-gpu/16.4-LTS-ubuntu2404-py312/Dockerfile.ml -t dbx-runtime:python-gpu-16.4-lts-ml .
 
 # Build complete standard chain
 docker build -f data/minimal/latest/Dockerfile -t dbx-runtime:minimal .
-docker build -f data/python/latest/Dockerfile -t dbx-runtime:python-py312 .
-docker build -f data/dbfsfuse/latest/Dockerfile -t dbx-runtime:dbfsfuse-py312 .
-docker build -f data/standard/latest/Dockerfile -t dbx-runtime:standard-py312 .
+docker build -f data/standard/latest/Dockerfile -t dbx-runtime:standard .
+docker build -f data/python/latest/Dockerfile -t dbx-runtime:python .
 ```
 
 ## CI/CD Pipeline
@@ -237,23 +222,23 @@ Images are tagged with multiple variants:
 
 ```bash
 # Pull latest Python runtime
-docker pull ghcr.io/<owner>/dbx-runtime-python:latest
+docker pull ghcr.io/<owner>/dbx-runtime:python-17.3-lts-ubuntu2404-py312
 
 # Pull specific LTS version
-docker pull ghcr.io/<owner>/dbx-runtime-python:14.3-lts
+docker pull ghcr.io/<owner>/dbx-runtime:python-15.4-lts-ubuntu2204-py311
 
 # Pull ML variant
-docker pull ghcr.io/<owner>/dbx-runtime-gpu:16.4-lts-ml
+docker pull ghcr.io/<owner>/dbx-runtime:python-gpu-16.4-lts-ml
 ```
 
 ### Run a Container
 
 ```bash
 # Run Python runtime interactively
-docker run -it ghcr.io/<owner>/dbx-runtime-python:14.3-lts bash
+docker run -it ghcr.io/<owner>/dbx-runtime:python-15.4-lts-ubuntu2204-py311 bash
 
 # Run with volume mount
-docker run -it -v $(pwd):/workspace ghcr.io/<owner>/dbx-runtime-python:latest bash
+docker run -it -v $(pwd):/workspace ghcr.io/<owner>/dbx-runtime:python-17.3-lts-ubuntu2404-py312 bash
 ```
 
 ### Use in Docker Compose
@@ -263,7 +248,7 @@ version: "3.8"
 
 services:
   databricks-python:
-    image: ghcr.io/<owner>/dbx-runtime-python:14.3-lts
+    image: ghcr.io/<owner>/dbx-runtime:python-15.4-lts-ubuntu2204-py311
     volumes:
       - ./notebooks:/databricks/notebooks
     environment:
@@ -273,7 +258,7 @@ services:
 ### Use as Base Image
 
 ```dockerfile
-FROM ghcr.io/<owner>/dbx-runtime-python:14.3-lts
+FROM ghcr.io/<owner>/dbx-runtime:python-15.4-lts-ubuntu2204-py311
 
 # Add your custom dependencies
 RUN /databricks/python3/bin/pip install pandas scikit-learn
@@ -289,13 +274,12 @@ CMD ["/databricks/python3/bin/python", "main.py"]
 
 The following LTS runtimes are currently supported:
 
-- **10.4 LTS** - Ubuntu 20.04, Python 3.8
-- **11.3 LTS** - Ubuntu 20.04, Python 3.9
 - **12.2 LTS** - Ubuntu 20.04, Python 3.9
 - **13.3 LTS** - Ubuntu 22.04/24.04, Python 3.10
 - **14.3 LTS** - Ubuntu 22.04/24.04, Python 3.10
 - **15.4 LTS** - Ubuntu 22.04/24.04, Python 3.11
-- **16.4 LTS** - Ubuntu 22.04/24.04, Python 3.12
+- **16.4 LTS** - Ubuntu 24.04, Python 3.12
+- **17.3 LTS** - Ubuntu 24.04, Python 3.12
 
 Each LTS runtime includes:
 
@@ -344,7 +328,7 @@ Or use the `--no-cache` flag:
 
 1. Modify Dockerfile templates in `src/dbx_container/images/`
 2. Regenerate Dockerfiles: `poetry run dbx-container build`
-3. Test build locally: `./scripts/build_images.sh --runtime "14.3 LTS" --image-type python`
+3. Test build locally: `./scripts/build_images.sh --runtime "15.4 LTS" --image-type python`
 4. Verify the container works: `docker run -it <image-name> bash`
 
 ### Adding New Image Types

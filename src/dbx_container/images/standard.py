@@ -21,9 +21,11 @@ class StandardDockerfile(DockerfileBuilder):
         instrs: list[DockerInstruction] | None = None,
         registry: str | None = None,
         use_gpu_base: bool = False,
+        ubuntu_version: str = "24.04",
     ) -> None:
         self.use_gpu_base = use_gpu_base
         self.versions = versions or PythonDockerfileVersions()
+        self.ubuntu_version = ubuntu_version
 
         # Determine base image
         if base_image is None:
@@ -71,6 +73,5 @@ class StandardDockerfile(DockerfileBuilder):
 
     @property
     def image_name(self) -> str:
-        python_version = self.versions.python.replace(".", "")
         base = "standard-gpu" if self.use_gpu_base else "standard"
-        return f"{base}-py{python_version}"
+        return base

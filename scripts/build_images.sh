@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --runtime RUNTIME      Build specific runtime version (e.g., '14.3 LTS')"
-            echo "  --image-type TYPE      Build specific image type (minimal|python|dbfsfuse|standard|gpu|all)"
+            echo "  --image-type TYPE      Build specific image type (minimal|python|standard|gpu|all)"
             echo "  --push                 Push images to registry after building"
             echo "  --registry REGISTRY    Registry to push to (default: ghcr.io)"
             echo "  --no-cache            Build without cache"
@@ -110,7 +110,7 @@ BUILT_COUNT=0
 FAILED_COUNT=0
 
 # Build non-runtime-specific images
-for IMG_TYPE in minimal dbfsfuse standard; do
+for IMG_TYPE in minimal gpu; do
     if [ "$IMAGE_TYPE" != "all" ] && [ "$IMAGE_TYPE" != "$IMG_TYPE" ]; then
         continue
     fi

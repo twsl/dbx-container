@@ -1,3 +1,4 @@
+from datetime import date
 import json
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from dbx_container.images.gpu import GpuDockerfile
 from dbx_container.images.minimal import MinimalUbuntuDockerfile
 from dbx_container.images.python import PythonDockerfile, PythonDockerfileVersions
 from dbx_container.images.standard import StandardDockerfile
+from dbx_container.models.environment import SystemEnvironment
 from dbx_container.models.runtime import Runtime
 from dbx_container.utils.logging import get_logger
 
@@ -21,7 +23,9 @@ class RuntimeContainerEngine:
         data_dir: Path | str = Path("./data"),
         max_workers: int = 5,
         verify_ssl: bool = False,
-        latest_lts_count: int | None = 3,
+        latest_lts_count: int | None = 2,
+        force_ubuntu_version: str | None = None,
+        skip_ml_variants: bool = True,
     ) -> None:
         """Initialize the ContainerEngine.
 
@@ -29,12 +33,17 @@ class RuntimeContainerEngine:
             data_dir: Directory where to save generated files
             max_workers: Maximum number of worker threads for scraping
             verify_ssl: Whether to verify SSL certificates when making HTTP requests
-            latest_lts_count: Number of latest LTS versions to build (None for all LTS versions, default: 3)
+            latest_lts_count: Number of latest LTS versions to build (None for all LTS versions, default: 2)
+            force_ubuntu_version: Force a specific Ubuntu version for all base images (e.g., "22.04").
+                                  If None, defaults to "24.04" unless matching runtime's OS version.
+            skip_ml_variants: Skip ML runtime variants during generation (default: True)
         """
         self.logger = get_logger(self.__class__.__name__)
         self.data_dir = Path(data_dir) if isinstance(data_dir, str) else data_dir
         self.scraper = RuntimeScraper(max_workers=max_workers, verify_ssl=verify_ssl)
         self.latest_lts_count = latest_lts_count
+        self.force_ubuntu_version = force_ubuntu_version
+        self.skip_ml_variants = skip_ml_variants
 
         # Ensure data directory exists
         self.data_dir.mkdir(exist_ok=True)
@@ -44,6 +53,13 @@ class RuntimeContainerEngine:
         # GPU chain: nvidia/cuda -> minimal-gpu -> standard-gpu -> python-gpu
         # Standalone GPU: nvidia/cuda -> gpu
         self.image_types = {
+            "gpu": {
+                "class": GpuDockerfile,
+                "description": "Standalone GPU-enabled container with CUDA support",
+                "kwargs": {},
+                "depends_on": None,  # Standalone, uses nvidia/cuda directly
+                "runtime_specific": False,  # Does not need runtime-specific builds
+            },
             "minimal": {
                 "class": MinimalUbuntuDockerfile,
                 "description": "Minimal Ubuntu 24.04 LTS container with Java",
@@ -86,15 +102,6 @@ class RuntimeContainerEngine:
                 "depends_on": "standard-gpu",
                 "runtime_specific": True,  # Needs runtime-specific requirements.txt
             },
-            "gpu": {
-                "class": GpuDockerfile,
-                "description": "Standalone GPU-enabled container with CUDA support",
-                "kwargs": {
-                    "cuda_version": "11.8.0",
-                },
-                "depends_on": None,  # Standalone, uses nvidia/cuda directly
-                "runtime_specific": True,  # Needs runtime-specific builds
-            },
         }
 
     def get_dependency_image_reference(
@@ -120,6 +127,16 @@ class RuntimeContainerEngine:
         config = self.image_types.get(image_type)
         if not config or not config["depends_on"]:
             # No dependency, use default base image
+            # Check if variation specifies a different OS version
+            if variation and "os_version" in variation:
+                os_version = variation["os_version"]
+                if os_version != "24.04":
+                    self.logger.warning(
+                        f"Runtime uses Ubuntu {os_version}, but upgrading to 24.04 for base image. "
+                        f"To use Ubuntu {os_version}, explicitly configure it in the build chain."
+                    )
+                # Default to 24.04 unless explicitly configured otherwise
+                return "ubuntu:24.04"
             return "ubuntu:24.04"
 
         depends_on = config["depends_on"]
@@ -149,6 +166,31 @@ class RuntimeContainerEngine:
 
         return image_ref
 
+    def should_upgrade_os_version(self, variation: dict[str, str] | None) -> tuple[bool, str]:
+        """Check if OS version should be upgraded to default (24.04).
+
+        Args:
+            variation: The variation config with os_version
+
+        Returns:
+            Tuple of (should_upgrade, os_version_to_use)
+        """
+        # If force_ubuntu_version is set, use it
+        if self.force_ubuntu_version:
+            return False, self.force_ubuntu_version
+
+        if not variation or "os_version" not in variation:
+            return False, "24.04"
+
+        os_version = variation["os_version"]
+        default_os = "24.04"
+
+        if os_version != default_os:
+            # By default, upgrade to latest LTS (24.04)
+            return True, default_os
+
+        return False, os_version
+
     def get_python_versions_from_runtime(self, runtime: Runtime) -> PythonDockerfileVersions:
         """Extract Python version information from runtime to configure containers.
 
@@ -168,6 +210,18 @@ class RuntimeContainerEngine:
                 python_version = f"{parts[0]}.{parts[1]}"
 
         return PythonDockerfileVersions(python=python_version)
+
+    @staticmethod
+    def sanitize_runtime_version(version: str) -> str:
+        """Sanitize runtime version by replacing whitespace with dashes.
+
+        Args:
+            version: The runtime version string (e.g., "15.4 LTS")
+
+        Returns:
+            Sanitized version string (e.g., "15.4-LTS")
+        """
+        return version.replace(" ", "-")
 
     def extract_os_version_from_runtime(self, runtime: Runtime) -> str:
         """Extract OS version information from runtime.
@@ -222,29 +276,9 @@ class RuntimeContainerEngine:
                 "os_version": os_version,
                 "python_version": python_versions.python,
                 "suffix": f"ubuntu{os_version.replace('.', '')}-py{python_versions.python.replace('.', '')}",
+                "separator": "-",  # Separator between runtime version and suffix
             }
         ]
-
-        # Add common variations for LTS runtimes
-        if runtime.is_lts:
-            # Add Ubuntu 22.04 variation if the runtime uses 24.04
-            if os_version == "24.04":
-                variations.append(
-                    {
-                        "os_version": "22.04",
-                        "python_version": python_versions.python,
-                        "suffix": f"ubuntu2204-py{python_versions.python.replace('.', '')}",
-                    }
-                )
-            # Add Ubuntu 24.04 variation if the runtime uses 22.04
-            elif os_version == "22.04":
-                variations.append(
-                    {
-                        "os_version": "24.04",
-                        "python_version": python_versions.python,
-                        "suffix": f"ubuntu2404-py{python_versions.python.replace('.', '')}",
-                    }
-                )
 
         return variations
 
@@ -280,20 +314,37 @@ class RuntimeContainerEngine:
             # Use the dependency image as base
             base_image = self.get_dependency_image_reference(image_type, runtime, variation, registry, use_gpu_base)
 
+        runtime_specific = [k for k, v in self.image_types.items() if v["runtime_specific"]]
+
         # Extract Python versions for Python-based images
         kwargs = config["kwargs"].copy()
-        if "versions" not in kwargs and image_type in [
-            "python",
-            "python-gpu",
-            "standard",
-            "standard-gpu",
-            "gpu",
-        ]:
+        if "versions" not in kwargs and image_type in runtime_specific:
             if variation:
                 # Use variation-specific Python version
                 kwargs["versions"] = PythonDockerfileVersions(python=variation["python_version"])
             else:
                 kwargs["versions"] = self.get_python_versions_from_runtime(runtime)
+
+        # Handle OS version for base images (minimal, minimal-gpu, standard, standard-gpu)
+        # Check if we need to build with a specific OS version
+        if image_type in ["minimal", "minimal-gpu", "standard", "standard-gpu"] and variation:
+            should_upgrade, os_version_to_use = self.should_upgrade_os_version(variation)
+            runtime_os = variation.get("os_version", "24.04")
+
+            if should_upgrade:
+                # Notify user that we're upgrading OS version
+                self.logger.info(
+                    f"🔄 Runtime {runtime.version} uses Ubuntu {runtime_os}, "
+                    f"automatically upgrading base images to Ubuntu {os_version_to_use}"
+                )
+            elif runtime_os != "24.04":
+                # Explicitly configured to use non-default OS
+                self.logger.info(f"📦 Building {image_type} with Ubuntu {runtime_os} as explicitly configured")
+                os_version_to_use = runtime_os
+
+            # Pass ubuntu_version to minimal/minimal-gpu and standard/standard-gpu images
+            if image_type in ["minimal", "minimal-gpu", "standard", "standard-gpu"]:
+                kwargs["ubuntu_version"] = os_version_to_use
 
         # Override base image if not already specified and we have a dependency
         # For images without dependencies (minimal, minimal-gpu), let the class handle the base image
@@ -306,7 +357,7 @@ class RuntimeContainerEngine:
 
         # Pass runtime to image constructor for metadata labels
         # Only python and python-gpu images accept runtime parameter
-        if image_type in ["python", "python-gpu"]:
+        if image_type in runtime_specific:
             kwargs["runtime"] = runtime
 
             # Generate requirements.txt and pass the path
@@ -349,18 +400,19 @@ class RuntimeContainerEngine:
         Returns:
             Path to the saved file
         """
-        # Create directory structure: data/{image_type}/{runtime_version}[_variation]/
-        runtime_version = runtime.version
+        # Create directory structure: data/{image_type}/{runtime_version}[-variation][-ml]/
+        runtime_version = self.sanitize_runtime_version(runtime.version)
         if variation:
-            runtime_version = f"{runtime.version}_{variation['suffix']}"
+            separator = variation.get("separator", "-")
+            runtime_version = f"{runtime_version}{separator}{variation['suffix']}"
+        if runtime.is_ml:
+            runtime_version = f"{runtime_version}-ml"
 
         runtime_dir = self.data_dir / image_type / runtime_version
         runtime_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine filename - include ML suffix if it's an ML runtime
+        # Determine filename - always use "Dockerfile" now that ML variants have their own folder
         filename = "Dockerfile"
-        if runtime.is_ml:
-            filename = "Dockerfile.ml"
 
         dockerfile_path = runtime_dir / filename
         dockerfile_path.write_text(dockerfile_content)
@@ -384,9 +436,12 @@ class RuntimeContainerEngine:
         Returns:
             Path to the generated requirements.txt file
         """
-        runtime_version = runtime.version
+        runtime_version = self.sanitize_runtime_version(runtime.version)
         if variation:
-            runtime_version = f"{runtime.version}_{variation['suffix']}"
+            separator = variation.get("separator", "-")
+            runtime_version = f"{runtime_version}{separator}{variation['suffix']}"
+        if runtime.is_ml:
+            runtime_version = f"{runtime_version}-ml"
 
         runtime_dir = self.data_dir / image_type / runtime_version
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -422,9 +477,12 @@ class RuntimeContainerEngine:
         Returns:
             Path to the saved metadata file
         """
-        runtime_version = runtime.version
+        runtime_version = self.sanitize_runtime_version(runtime.version)
         if variation:
-            runtime_version = f"{runtime.version}_{variation['suffix']}"
+            separator = variation.get("separator", "-")
+            runtime_version = f"{runtime_version}{separator}{variation['suffix']}"
+        if runtime.is_ml:
+            runtime_version = f"{runtime_version}-ml"
 
         runtime_dir = self.data_dir / image_type / runtime_version
         runtime_dir.mkdir(parents=True, exist_ok=True)
@@ -466,10 +524,8 @@ class RuntimeContainerEngine:
                 "suffix": variation["suffix"],
             }
 
-        # Determine filename
+        # Determine filename - always use "runtime_metadata.json" now that ML variants have their own folder
         filename = "runtime_metadata.json"
-        if runtime.is_ml:
-            filename = "runtime_metadata.ml.json"
 
         metadata_path = runtime_dir / filename
         metadata_path.write_text(json.dumps(metadata, indent=2))
@@ -497,14 +553,75 @@ class RuntimeContainerEngine:
         self.logger.print(f"\n🔨 Building images for runtime {runtime_display}")
         generated_files = {}
 
-        # Build runtime-specific images: python chain (python -> dbfsfuse -> standard) and gpu
-        runtime_specific_types = ["python", "python-gpu", "dbfsfuse", "dbfsfuse-gpu", "standard", "standard-gpu", "gpu"]
+        # Get all variations for this runtime
+        variations = self.get_runtime_variations(runtime)
+
+        # Check if we need to build OS-specific base images (minimal, standard)
+        # This happens when the runtime uses a different OS version or force_ubuntu_version is set
+        for variation in variations:
+            should_upgrade, os_version_to_use = self.should_upgrade_os_version(variation)
+            runtime_os = variation.get("os_version", "24.04")
+
+            # Build OS-specific base images if needed
+            if runtime_os != "24.04" or self.force_ubuntu_version:
+                # Build minimal and standard images with the specific OS version
+                for base_type in ["minimal", "standard"]:
+                    # Also build GPU variants if they're in the dependency chain
+                    for use_gpu in [False, True]:
+                        image_type = f"{base_type}-gpu" if use_gpu else base_type
+                        config = self.image_types.get(image_type)
+
+                        if not config:
+                            continue
+
+                        try:
+                            # Create a minimal dummy runtime for base images
+                            dummy_runtime = Runtime(
+                                version="generic",
+                                release_date=date.today(),
+                                end_of_support_date=date.today(),
+                                spark_version="N/A",
+                                url="",
+                                is_ml=False,
+                                is_lts=False,
+                                system_environment=SystemEnvironment(
+                                    operating_system=f"Ubuntu {os_version_to_use} LTS",
+                                    java_version="N/A",
+                                    scala_version="N/A",
+                                    python_version="N/A",
+                                    r_version="N/A",
+                                    delta_lake_version="N/A",
+                                ),
+                                included_libraries={},
+                            )
+
+                            # Generate Dockerfile with OS-specific version
+                            dockerfile_content = self.generate_dockerfile_for_image_type(
+                                dummy_runtime, image_type, config, variation, registry
+                            )
+
+                            # Save to OS-specific directory
+                            # Ubuntu 24.04 goes to "latest", other versions get their own folder
+                            if os_version_to_use == "24.04":
+                                os_dir = self.data_dir / image_type / "latest"
+                            else:
+                                os_dir = self.data_dir / image_type / f"ubuntu{os_version_to_use.replace('.', '')}"
+                            os_dir.mkdir(parents=True, exist_ok=True)
+                            dockerfile_path = os_dir / "Dockerfile"
+                            dockerfile_path.write_text(dockerfile_content)
+
+                            self.logger.debug(f"Generated {image_type} base image for Ubuntu {os_version_to_use}")
+
+                        except Exception:
+                            self.logger.exception(
+                                f"Failed to generate {image_type} base image for Ubuntu {os_version_to_use}"
+                            )
+
+        # Build runtime-specific images: python chain (standard -> python)
+        runtime_specific_types = [k for k, v in self.image_types.items() if v["runtime_specific"]]
 
         # Filter image types to only those that need runtime variations
         filtered_image_types = {k: v for k, v in self.image_types.items() if k in runtime_specific_types}
-
-        # Get all variations for this runtime
-        variations = self.get_runtime_variations(runtime)
 
         # Use rich track for progress indication
         for image_type, config in self.logger.progress(
@@ -554,12 +671,7 @@ class RuntimeContainerEngine:
         generated_files = {}
 
         # Image types that don't need runtime variations
-        # Only minimal images are truly non-runtime-specific
-        # All python-based images (python, dbfsfuse, standard) are now runtime-specific
-        non_runtime_types = [
-            "minimal",
-            "minimal-gpu",
-        ]
+        non_runtime_types = [k for k, v in self.image_types.items() if not v["runtime_specific"]]
 
         # Filter image types to only those that don't need runtime variations
         filtered_image_types = {k: v for k, v in self.image_types.items() if k in non_runtime_types}
@@ -571,11 +683,6 @@ class RuntimeContainerEngine:
             try:
                 # Generate Dockerfile without runtime-specific configuration
                 # Create a minimal Runtime object for the method signature (minimal images don't use it)
-                from datetime import date
-
-                from dbx_container.models.environment import SystemEnvironment
-                from dbx_container.models.runtime import Runtime
-
                 dummy_runtime = Runtime(
                     version="generic",
                     release_date=date.today(),
@@ -698,7 +805,11 @@ class RuntimeContainerEngine:
         filtered_runtimes = []
         selected_versions = set()
         for version, runtime_list in latest_versions:
-            filtered_runtimes.extend(runtime_list)
+            if self.skip_ml_variants:
+                # Only include non-ML variants
+                filtered_runtimes.extend([r for r in runtime_list if not r.is_ml])
+            else:
+                filtered_runtimes.extend(runtime_list)
             selected_versions.add(version)
 
         # Log which versions were selected
@@ -829,7 +940,7 @@ class RuntimeContainerEngine:
 
         matrix_entries = []
 
-        # Process runtime-specific images (gpu only - python/dbfsfuse/standard are non-runtime-specific now)
+        # Process runtime-specific images (python, python-gpu)
         for runtime_key, runtime_data in build_summary["build_details"].items():
             # Skip non-runtime-specific builds
             if runtime_key == "non_runtime_specific":
@@ -849,21 +960,39 @@ class RuntimeContainerEngine:
                 if image_type and img_type != image_type:
                     continue
 
-                # Only process gpu images (runtime-specific ones)
-                if img_type not in ["gpu"]:
+                # Only process runtime-specific images
+                # Non-runtime-specific: minimal, minimal-gpu, standard, standard-gpu, gpu
+                # Runtime-specific: python, python-gpu
+                if img_type not in ["python", "python-gpu"]:
                     continue
 
                 if not files:
                     continue
 
                 # Extract variation suffix from the first file path
-                # e.g., "data/gpu/14.3 LTS_ubuntu2204-py310/Dockerfile"
+                # e.g., "data/python/17.3-LTS-ubuntu2404-py312/Dockerfile"
+                # We want to extract: "-ubuntu2404-py312"
+                # The runtime dir includes: VERSION-LTS-SUFFIX or VERSION-SUFFIX
                 first_file = files[0]
                 parts = first_file.split("/")
                 if len(parts) >= 3:
-                    runtime_with_suffix = parts[2]
-                    # Extract suffix (e.g., "_ubuntu2204-py310")
-                    suffix = "_" + runtime_with_suffix.split("_", 1)[1] if "_" in runtime_with_suffix else ""
+                    runtime_dir = parts[2]
+                    # Extract suffix: everything after the runtime version
+                    # Runtime version is stored in the 'runtime' variable (e.g., "17.3 LTS")
+                    # Replace spaces with dashes to match the directory format
+                    runtime_sanitized = runtime.replace(" ", "-")
+
+                    # Remove the runtime prefix to get just the suffix
+                    if runtime_dir.startswith(runtime_sanitized):
+                        suffix = runtime_dir[len(runtime_sanitized) :]
+                        # Remove -ml suffix if present (it's tracked separately)
+                        suffix = suffix.replace("-ml", "")
+                    else:
+                        # Fallback: try to find the ubuntu/py pattern
+                        import re
+
+                        match = re.search(r"(-ubuntu\d+-py\d+)", runtime_dir)
+                        suffix = match.group(1) if match else ""
                 else:
                     suffix = ""
 

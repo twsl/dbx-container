@@ -14,12 +14,12 @@
 
 Create databricks runtime containers, [vibe coded](https://x.com/karpathy/status/1886192184808149383).
 
-Docker images are based on the [container definitions](https://github.com/databricks/containers) and [runtime information](https://docs.databricks.com/aws/en/release-notes/runtime/).
+Docker images are losely based on the [container definitions](https://github.com/databricks/containers) and [runtime information](https://docs.databricks.com/aws/en/release-notes/runtime/).
 
 ## Features
 
 - Generate Dockerfiles for all Databricks runtime versions
-- Support for multiple image types: minimal, python, dbfsfuse, standard, gpu
+- Support for multiple image types: minimal, standard, python (all as GPU variants where applicable)
 - LTS runtime support with ML variants
 - Automated CI/CD pipeline for building and publishing images
 - Multiple OS and Python version variations
@@ -52,7 +52,7 @@ poetry run dbx-container build
 Generate for a specific runtime:
 
 ```bash
-poetry run dbx-container build --runtime-version "14.3 LTS"
+poetry run dbx-container build --runtime-version "15.4 LTS"
 ```
 
 Generate for a specific image type:
@@ -88,17 +88,18 @@ Build and push to a registry:
 Pull from GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/twsl/dbx-runtime-python:14.3-lts
-docker pull ghcr.io/twsl/dbx-runtime-gpu:16.4-lts-ml
+docker pull ghcr.io/twsl/dbx-runtime:python-17.3-lts-ubuntu2404-py312
 ```
 
 ## Available Image Types
 
 - **minimal** - Base Ubuntu with Java (non-runtime-specific)
-- **python** - Python runtime with virtualenv (LTS versions)
-- **dbfsfuse** - Python with DBFS FUSE support (non-runtime-specific)
-- **standard** - Standard with SSH server (non-runtime-specific)
-- **gpu** - GPU-enabled with CUDA support (LTS versions)
+- **minimal-gpu** - Base GPU image with CUDA and Java (non-runtime-specific)
+- **standard** - Standard with SSH server and FUSE support (non-runtime-specific)
+- **standard-gpu** - GPU standard with SSH and FUSE (non-runtime-specific)
+- **python** - Python runtime with virtualenv (runtime-specific)
+- **python-gpu** - GPU Python with CUDA support (runtime-specific)
+- **gpu** - Standalone GPU-enabled container (non-runtime-specific)
 
 Each LTS runtime includes:
 

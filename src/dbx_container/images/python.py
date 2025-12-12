@@ -61,7 +61,9 @@ class PythonDockerfile(DockerfileBuilder):
                 # Use runtime-specific path that will be generated
                 # This path is relative to the build context
                 use_gpu_suffix = "-gpu" if use_gpu_base else ""
-                requirements_path = f"data/python{use_gpu_suffix}/{runtime.version}_ubuntu2404-py{self.versions.python.replace('.', '')}/requirements.txt"
+                sanitized_version = runtime.version.replace(" ", "-")
+                ml_suffix = "-ml" if runtime.is_ml else ""
+                requirements_path = f"data/python{use_gpu_suffix}/{sanitized_version}-ubuntu2404-py{self.versions.python.replace('.', '')}{ml_suffix}/requirements.txt"
             else:
                 # Fall back to static requirements file
                 requirements_path = "src/dbx_container/data/requirements.txt"
@@ -125,10 +127,12 @@ class PythonDockerfile(DockerfileBuilder):
 
         # Add runtime metadata labels if runtime is provided
         if runtime:
+            # Sanitize runtime version for label (replace spaces with dashes)
+            sanitized_version = runtime.version.replace(" ", "-")
             instructions.extend(
                 [
                     CommentInstruction(comment="Runtime metadata"),
-                    LabelInstruction(key="databricks.runtime.version", value=str(runtime.version)),
+                    LabelInstruction(key="databricks.runtime.version", value=sanitized_version),
                     LabelInstruction(key="databricks.runtime.release_date", value=str(runtime.release_date)),
                     LabelInstruction(
                         key="databricks.runtime.end_of_support_date", value=str(runtime.end_of_support_date)
@@ -155,6 +159,7 @@ class PythonDockerfile(DockerfileBuilder):
     @property
     def image_name(self) -> str:
         python_version = self.versions.python.replace(".", "")
-        runtime_version = self.runtime.version.replace(".", "").replace(" ", "-")
+        # Sanitize runtime version: replace spaces with dashes, keep dots
+        runtime_version = self.runtime.version.replace(" ", "-")
         base = "python-gpu" if self.use_gpu_base else "python"
         return f"{base}-py{python_version}-{runtime_version}"

@@ -37,7 +37,7 @@ def setup_build_command(subparsers) -> None:
     parser.add_argument(
         "--image-type",
         type=str,
-        choices=["minimal", "python", "dbfsfuse", "standard", "gpu"],
+        choices=["minimal", "python", "standard", "gpu"],
         help="Specific image type to build. If not provided, builds all image types",
     )
     parser.add_argument(
@@ -62,8 +62,19 @@ def setup_build_command(subparsers) -> None:
     parser.add_argument(
         "--lts-count",
         type=int,
-        default=3,
-        help="Number of latest LTS versions to build when --latest-lts-only is used (default: 3)",
+        default=2,
+        help="Number of latest LTS versions to build when --latest-lts-only is used (default: 2)",
+    )
+    parser.add_argument(
+        "--force-ubuntu-version",
+        type=str,
+        help="Force a specific Ubuntu version for all base images (e.g., '22.04'). "
+        "By default, upgrades to 24.04 unless explicitly configured.",
+    )
+    parser.add_argument(
+        "--include-ml-variants",
+        action="store_true",
+        help="Include ML runtime variants during generation (by default, ML variants are skipped)",
     )
     parser.set_defaults(func=run_build_dockerfiles)
 
@@ -94,6 +105,8 @@ def run_build_dockerfiles(args) -> Literal[1] | Literal[0]:
             max_workers=args.threads,
             verify_ssl=verify_ssl,
             latest_lts_count=lts_count,
+            force_ubuntu_version=args.force_ubuntu_version,
+            skip_ml_variants=not args.include_ml_variants,
         )
 
         if args.runtime_version:
@@ -226,8 +239,8 @@ def setup_generate_matrix_command(subparsers) -> None:
     parser.add_argument(
         "--image-type",
         type=str,
-        choices=["gpu"],
-        help="Specific image type to include in matrix (currently only 'gpu' is runtime-specific)",
+        choices=["python", "python-gpu"],
+        help="Specific image type to include in matrix (runtime-specific images only)",
     )
     parser.add_argument(
         "--latest-lts-count",

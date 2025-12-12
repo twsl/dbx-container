@@ -24,18 +24,15 @@ class MinimalUbuntuDockerfile(DockerfileBuilder):
         use_gpu_base: bool = False,
         cuda_version: str = "12.8.1",
         ubuntu_version: str = "24.04",
+        zulu_version: str = "1.0.0-3",
+        jdk8_version: str = "8.0.432-1",
+        jdk17_version: str = "17.0.16-1",
     ) -> None:
         self.use_gpu_base = use_gpu_base
 
         # Determine base image
         if base_image is None:
-            if use_gpu_base:
-                # Use NVIDIA CUDA image for GPU variant
-                ubuntu_tag = ubuntu_version.replace(".", "")
-                base_image = f"nvidia/cuda:{cuda_version}-cudnn-runtime-ubuntu{ubuntu_tag}"
-            else:
-                # Use standard Ubuntu image
-                base_image = "ubuntu:24.04"
+            base_image = "dbx-runtime:gpu" if use_gpu_base else f"ubuntu:{ubuntu_version}"
 
         instructions = [
             EnvInstruction(name="LANG", value="C.UTF-8"),
@@ -53,10 +50,10 @@ class MinimalUbuntuDockerfile(DockerfileBuilder):
             ),
             CommentInstruction(comment="Add the Azul package to the APT repository"),
             RunInstruction(
-                command="curl -O https://cdn.azul.com/zulu/bin/zulu-repo_1.0.0-3_all.deb && apt-get install ./zulu-repo_1.0.0-3_all.deb && rm zulu-repo_1.0.0-3_all.deb"
+                command=f"curl -O https://cdn.azul.com/zulu/bin/zulu-repo_{zulu_version}_all.deb && apt-get install ./zulu-repo_{zulu_version}_all.deb && rm zulu-repo_{zulu_version}_all.deb"
             ),
-            ArgInstruction(name="JDK8_VERSION", default='"8.0.432-1"'),
-            ArgInstruction(name="JDK17_VERSION", default='"17.0.13-1"'),
+            ArgInstruction(name="JDK8_VERSION", default=f'"{jdk8_version}"'),
+            ArgInstruction(name="JDK17_VERSION", default=f'"{jdk17_version}"'),
             RunInstruction(command="apt-get update"),
             RunInstruction(
                 command=(
@@ -100,7 +97,7 @@ class MinimalUbuntuDockerfile(DockerfileBuilder):
     @property
     def depends_on(self) -> str | None:
         """Return the base_name of the class this image depends on."""
-        return None  # Base image has no dependencies
+        return "gpu" if self.use_gpu_base else None  # GPU variant depends on gpu image
 
     @property
     def image_name(self) -> str:

@@ -23,11 +23,11 @@ poetry run dbx-container build --output-dir data
 Use Docker Compose profiles to start specific containers:
 
 ```bash
-# Start latest Python runtime
+# Start latest Python runtime (17.3 LTS)
 docker compose --profile python up -d python-latest
 
-# Start Python 14.3 LTS runtime
-docker compose --profile python-14 up -d python-14-3
+# Start Python 15.4 LTS runtime
+docker compose --profile python-15 up -d python-15-4
 
 # Start latest GPU runtime (requires NVIDIA GPU)
 docker compose --profile gpu up -d gpu-latest
@@ -64,14 +64,15 @@ docker compose down
 | Profile     | Description              | Container                       |
 | ----------- | ------------------------ | ------------------------------- |
 | `minimal`   | Minimal Ubuntu with Java | minimal                         |
-| `python`    | All Python runtimes      | python-latest, python-14-3      |
-| `python-14` | Python 14.3 LTS          | python-14-3                     |
+| `python`    | All Python runtimes      | python-latest, python-15-4      |
+| `python-15` | Python 15.4 LTS          | python-15-4                     |
+| `python-16` | Python 16.4 LTS          | python-16-4                     |
+| `python-17` | Python 17.3 LTS          | python-17-3                     |
 | `python-ml` | Python ML runtimes       | python-ml-latest                |
 | `gpu`       | GPU runtimes             | gpu-latest                      |
 | `gpu-ml`    | GPU ML runtimes          | gpu-ml-latest                   |
 | `ml`        | All ML runtimes          | python-ml-latest, gpu-ml-latest |
 | `latest`    | Latest LTS runtimes      | python-latest, gpu-latest       |
-| `dbfsfuse`  | DBFS FUSE support        | dbfsfuse                        |
 | `standard`  | SSH server support       | standard                        |
 
 ## Examples
@@ -165,7 +166,7 @@ Create a custom Dockerfile:
 
 ```dockerfile
 # Dockerfile.custom
-FROM dbx-runtime-python:16.4-lts
+FROM dbx-runtime:python-17.3-lts-ubuntu2404-py312
 
 # Install additional packages
 RUN /databricks/python3/bin/pip install \
@@ -186,7 +187,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.custom
-    image: dbx-runtime-python:custom
+    image: dbx-runtime:python-custom
     volumes:
       - ./notebooks:/databricks/notebooks
     command: tail -f /dev/null
@@ -302,7 +303,7 @@ Example production configuration:
 ```yaml
 services:
   python-prod:
-    image: ghcr.io/twsl/dbx-runtime-python:16.4-lts
+    image: ghcr.io/twsl/dbx-runtime:python-17.3-lts-ubuntu2404-py312
     deploy:
       resources:
         limits:

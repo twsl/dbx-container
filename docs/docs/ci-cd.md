@@ -26,7 +26,7 @@ Location: `.github/workflows/docker-build.yaml`
 
 Use GitHub's workflow dispatch feature with these options:
 
-- **Runtime Version**: Filter by specific runtime (e.g., "14.3 LTS")
+- **Runtime Version**: Filter by specific runtime (e.g., "15.4 LTS")
 - **Image Type**: Choose specific type or "all"
 - **Push Images**: Toggle whether to push to registry
 
@@ -71,7 +71,7 @@ Use GitHub's workflow dispatch feature with these options:
 
 ### 3. build-non-runtime-images
 
-**Purpose**: Build non-runtime-specific images (minimal, dbfsfuse, standard)
+**Purpose**: Build non-runtime-specific images (minimal, minimal-gpu, gpu)
 
 **Strategy**:
 
@@ -90,11 +90,11 @@ Use GitHub's workflow dispatch feature with these options:
 Multiple tags are created for flexibility:
 
 ```
-ghcr.io/twsl/dbx-runtime-python:16.4-lts
-ghcr.io/twsl/dbx-runtime-python:16.4-lts-ml
-ghcr.io/twsl/dbx-runtime-python:16.4-lts-ubuntu2404
-ghcr.io/twsl/dbx-runtime-python:16.4-lts-py312
-ghcr.io/twsl/dbx-runtime-python:latest  (most recent LTS)
+ghcr.io/twsl/dbx-runtime:python-17.3-lts-ubuntu2404-py312
+ghcr.io/twsl/dbx-runtime:python-17.3-lts-ml
+ghcr.io/twsl/dbx-runtime:python-16.4-lts-ubuntu2404-py312
+ghcr.io/twsl/dbx-runtime:python-16.4-lts-py312
+ghcr.io/twsl/dbx-runtime:python-latest  (most recent LTS)
 ```
 
 ### Non-Runtime-Specific Images
@@ -104,10 +104,9 @@ Non-runtime-specific images are tagged with Python version:
 ```
 ghcr.io/twsl/dbx-runtime:minimal
 ghcr.io/twsl/dbx-runtime:minimal-gpu
+ghcr.io/twsl/dbx-runtime:gpu
 ghcr.io/twsl/dbx-runtime:python-py312
 ghcr.io/twsl/dbx-runtime:python-gpu-py312
-ghcr.io/twsl/dbx-runtime:dbfsfuse-py312
-ghcr.io/twsl/dbx-runtime:dbfsfuse-gpu-py312
 ghcr.io/twsl/dbx-runtime:standard-py312
 ghcr.io/twsl/dbx-runtime:standard-gpu-py312
 ```
@@ -117,9 +116,9 @@ ghcr.io/twsl/dbx-runtime:standard-gpu-py312
 Single tag:
 
 ```
-ghcr.io/twsl/dbx-runtime-minimal:latest
-ghcr.io/twsl/dbx-runtime-dbfsfuse:latest
-ghcr.io/twsl/dbx-runtime-standard:latest
+ghcr.io/twsl/dbx-runtime:minimal-latest
+ghcr.io/twsl/dbx-runtime:gpu-latest
+ghcr.io/twsl/dbx-runtime:standard-latest
 ```
 
 ## Build Matrix
@@ -130,16 +129,16 @@ The build matrix is dynamically generated from `build_summary.json`:
 {
   "include": [
     {
-      "runtime": "16.4 LTS",
+      "runtime": "17.3 LTS",
       "image_type": "python",
       "variant": "",
-      "suffix": "_ubuntu2404-py312"
+      "suffix": "-ubuntu2404-py312"
     },
     {
       "runtime": "16.4 LTS",
       "image_type": "python",
       "variant": ".ml",
-      "suffix": "_ubuntu2404-py312"
+      "suffix": "-ubuntu2404-py312"
     },
     ...
   ]
@@ -193,7 +192,7 @@ gh workflow run docker-build.yaml \
 # Build specific runtime
 gh workflow run docker-build.yaml \
   --ref main \
-  -f runtime_version="14.3 LTS" \
+  -f runtime_version="15.4 LTS" \
   -f image_type=python \
   -f push_images=false
 ```
@@ -294,7 +293,7 @@ python scripts/generate_build_matrix.py \
   --only-lts
 
 # Build a sample image
-./scripts/build_images.sh --runtime "14.3 LTS" --image-type python
+./scripts/build_images.sh --runtime "15.4 LTS" --image-type python
 ```
 
 ### 2. Use Pull Requests
