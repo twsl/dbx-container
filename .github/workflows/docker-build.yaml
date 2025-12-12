@@ -119,7 +119,7 @@ jobs:
         id: set-matrix
         run: |
           MATRIX_CMD="poetry run dbx-container generate-matrix --only-lts"
-          
+
           # Configure image types for the matrix
           if [ "${{ github.event.inputs.image_type }}" = "gpu" ]; then
             # Only GPU images
@@ -129,15 +129,15 @@ jobs:
             MATRIX_CMD="$MATRIX_CMD --image-type python"
           fi
           # For "all", don't filter - generate matrix will include both python and python-gpu
-          
+
           # Apply LTS count filter
           if [ -n "${{ github.event.inputs.lts_count }}" ] && [ "${{ github.event.inputs.all_lts }}" != "true" ]; then
             MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
           fi
-          
+
           # Capture output and suppress stderr warnings (SSL warnings, poetry messages, etc)
           MATRIX_JSON=$(eval $MATRIX_CMD 2>&1 | grep -v "WARNING" | grep -v "⚠" | grep -v "Skipping virtualenv" | grep "^{")
-          
+
           # Validate JSON before outputting
           if echo "$MATRIX_JSON" | jq -e . >/dev/null 2>&1; then
             echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
@@ -204,8 +204,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:minimal
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.description=Minimal Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          provenance: false
           cache-from: type=gha,scope=minimal
           cache-to: type=gha,mode=max,scope=minimal
 
@@ -276,7 +278,7 @@ jobs:
           # Extract version number from runtime (e.g., "17.3 LTS" -> "17.3")
           version=$(echo "${{ matrix.runtime }}" | sed 's/ LTS//g')
           echo "version=${version}" >> $GITHUB_OUTPUT
-          
+
           # Determine if this is the latest LTS (first in matrix)
           first_runtime=$(echo '${{ toJson(fromJson(needs.generate-dockerfiles.outputs.matrix).include) }}' | jq -r '.[0].runtime')
           first_type=$(echo '${{ toJson(fromJson(needs.generate-dockerfiles.outputs.matrix).include) }}' | jq -r '.[0].image_type')
@@ -291,7 +293,7 @@ jobs:
         run: |
           # Always include the versioned tag
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ matrix.image_type }}-${{ steps.version.outputs.version }}"
-          
+
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -305,8 +307,10 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.description=Databricks ${{ matrix.runtime }} runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          provenance: false
           cache-from: type=gha,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
 
@@ -350,8 +354,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.description=Standard Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          provenance: false
           cache-from: type=gha,scope=standard
           cache-to: type=gha,mode=max,scope=standard
 
@@ -396,8 +402,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.description=GPU base Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          provenance: false
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu
 
@@ -442,8 +450,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:minimal-gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.description=Minimal GPU Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          provenance: false
           cache-from: type=gha,scope=minimal-gpu
           cache-to: type=gha,mode=max,scope=minimal-gpu
 
@@ -488,8 +498,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard-gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.description=Standard GPU Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          provenance: false
           cache-from: type=gha,scope=standard-gpu
           cache-to: type=gha,mode=max,scope=standard-gpu
 
