@@ -131,7 +131,7 @@ jobs:
             MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
           fi
           MATRIX_JSON=$(eval $MATRIX_CMD)
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
 
       - name: Check for GPU images
         id: check-images
