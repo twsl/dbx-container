@@ -157,17 +157,14 @@ class RuntimeContainerEngine:
         # For python images (and their GPU variants), include python version in tag
         # Check the base type (without -gpu suffix)
         base_dep_type = depends_on.replace("-gpu", "")
-        if base_dep_type in ["python", "standard"] and variation:
+        if base_dep_type == "python" and variation:
             python_version = variation["python_version"].replace(".", "")
             dep_name = f"{dep_name}-py{python_version}"
 
         # Format the image reference based on whether registry is provided
         # If registry is None, use local tag format (dbx-runtime:tag)
         # If registry is provided, use registry:tag format
-        if registry is None:
-            image_ref = f"dbx-runtime:{dep_name}"
-        else:
-            image_ref = f"{registry}:{dep_name}"
+        image_ref = f"dbx-runtime:{dep_name}" if registry is None else f"{registry}:{dep_name}"
 
         # If dependency is runtime-specific and we have runtime info, include it
         if dep_config and dep_config.get("runtime_specific") and runtime:
