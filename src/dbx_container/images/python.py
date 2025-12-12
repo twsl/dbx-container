@@ -89,7 +89,7 @@ class PythonDockerfile(DockerfileBuilder):
                 command=(
                     "/usr/local/bin/pip${PYTHON_VERSION} install --break-system-packages --no-cache-dir "
                     "virtualenv==${VIRTUALENV_VERSION} && "
-                    "sed -i -r 's/^(PERIODIC_UPDATE_ON_BY_DEFAULT) = True$/\\\\1 = False/' "
+                    r"sed -i -r 's/^(PERIODIC_UPDATE_ON_BY_DEFAULT) = True$/\1 = False/' "
                     "/usr/local/lib/python${PYTHON_VERSION}/dist-packages/virtualenv/seed/embed/base_embed.py && "
                     "/usr/local/bin/pip${PYTHON_VERSION} download pip==${PIP_VERSION} --dest "
                     "/usr/local/lib/python${PYTHON_VERSION}/dist-packages/virtualenv_support/"
