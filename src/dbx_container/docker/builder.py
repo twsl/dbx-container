@@ -23,7 +23,7 @@ class DockerfileBuilder:
     ) -> None:
         self.builder = StringBuilder()
         self.base_image = base_image
-        self.registry = registry or self.DEFAULT_NAMESPACE
+        self.registry = registry
         self.base_image.apply(self)
         # Only apply instructions when base_image is None (true composition)
         # When base_image is set to a real image, we're extending it and instructions should come from the class
@@ -37,7 +37,13 @@ class DockerfileBuilder:
 
     @property
     def full_image_name(self) -> str:
-        """Get the full image name with namespace/registry."""
+        """Get the full image name with namespace/registry.
+
+        If registry is None, returns only the image name (local Docker build).
+        If registry is set, returns registry/image_name format.
+        """
+        if self.registry is None:
+            return self.image_name
         return f"{self.registry}/{self.image_name}"
 
     def add_instruction(self, instruction: str) -> "DockerfileBuilder":

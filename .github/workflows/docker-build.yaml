@@ -84,7 +84,7 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
-          BUILD_CMD="poetry run dbx-container build --output-dir data"
+          BUILD_CMD="poetry run dbx-container build --output-dir data --registry '${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}'"
 
           # Runtime version filter
           if [ -n "${{ github.event.inputs.runtime_version }}" ]; then

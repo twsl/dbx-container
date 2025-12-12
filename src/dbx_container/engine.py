@@ -71,7 +71,7 @@ class RuntimeContainerEngine:
                 "class": MinimalUbuntuDockerfile,
                 "description": "Minimal GPU container with CUDA and Java",
                 "kwargs": {"use_gpu_base": True},
-                "depends_on": None,  # Uses nvidia/cuda directly
+                "depends_on": "gpu",  # Depends on gpu base image
                 "runtime_specific": False,
             },
             "standard": {
@@ -153,7 +153,13 @@ class RuntimeContainerEngine:
             python_version = variation["python_version"].replace(".", "")
             dep_name = f"{dep_name}-py{python_version}"
 
-        image_ref = f"{registry}:{dep_name}" if registry else f"dbx-runtime:{dep_name}"
+        # Format the image reference based on whether registry is provided
+        # If registry is None, use local tag format (dbx-runtime:tag)
+        # If registry is provided, use registry:tag format
+        if registry is None:
+            image_ref = f"dbx-runtime:{dep_name}"
+        else:
+            image_ref = f"{registry}:{dep_name}"
 
         # If dependency is runtime-specific and we have runtime info, include it
         if dep_config and dep_config.get("runtime_specific") and runtime:
@@ -352,8 +358,9 @@ class RuntimeContainerEngine:
             kwargs["base_image"] = base_image
 
         # Pass registry to image constructor
-        if registry is not None:
-            kwargs["registry"] = registry
+        # If registry is None, pass None (for local Docker builds without registry prefix)
+        # The image classes will handle None registry appropriately
+        kwargs["registry"] = registry
 
         # Pass runtime to image constructor for metadata labels
         # Only python and python-gpu images accept runtime parameter
