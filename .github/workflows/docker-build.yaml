@@ -208,6 +208,7 @@ jobs:
             org.opencontainers.image.description=Minimal Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.maintainer=${{ github.repository_owner }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=minimal
@@ -312,6 +313,7 @@ jobs:
             org.opencontainers.image.description=Databricks ${{ matrix.runtime }} runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.maintainer=${{ github.repository_owner }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
@@ -361,6 +363,7 @@ jobs:
             org.opencontainers.image.description=Standard Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.maintainer=${{ github.repository_owner }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=standard
@@ -410,6 +413,7 @@ jobs:
             org.opencontainers.image.description=GPU base Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.maintainer=${{ github.repository_owner }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=gpu
@@ -459,6 +463,7 @@ jobs:
             org.opencontainers.image.description=Minimal GPU Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.maintainer=${{ github.repository_owner }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=minimal-gpu
@@ -508,6 +513,7 @@ jobs:
             org.opencontainers.image.description=Standard GPU Databricks runtime container image
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.maintainer=${{ github.repository_owner }}
           provenance: false
           sbom: false
           cache-from: type=gha,scope=standard-gpu
