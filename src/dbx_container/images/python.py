@@ -59,7 +59,7 @@ class PythonDockerfile(DockerfileBuilder):
         if requirements_path is None:
             if runtime:
                 # Use runtime-specific path that will be generated
-                # This path is relative to the build context
+                # This path is relative to the build context (workspace root)
                 use_gpu_suffix = "-gpu" if use_gpu_base else ""
                 sanitized_version = runtime.version.replace(" ", "-")
                 ml_suffix = "-ml" if runtime.is_ml else ""
@@ -122,7 +122,9 @@ class PythonDockerfile(DockerfileBuilder):
                 )
             ),
             CopyInstruction(src="src/dbx_container/data/python-lsp-requirements.txt", dest="/databricks/."),
-            RunInstruction(command="/databricks/python-lsp/bin/pip install -r /databricks/python-lsp-requirements.txt"),
+            RunInstruction(
+                command="/databricks/python-lsp/bin/pip install --no-deps -r /databricks/python-lsp-requirements.txt"
+            ),
         ]
 
         # Add runtime metadata labels if runtime is provided

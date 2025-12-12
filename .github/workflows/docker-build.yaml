@@ -119,17 +119,22 @@ jobs:
         id: set-matrix
         run: |
           MATRIX_CMD="poetry run dbx-container generate-matrix --only-lts"
-          # Note: matrix generation is currently disabled as we build all images directly
-          # This can be re-enabled if runtime-specific variations are needed
-          # The matrix would handle python/python-gpu/standard/standard-gpu with different versions
-          if [ "${{ github.event.inputs.image_type }}" = "gpu" ] || [ "${{ github.event.inputs.image_type }}" = "all" ]; then
+          
+          # Configure image types for the matrix
+          if [ "${{ github.event.inputs.image_type }}" = "gpu" ]; then
+            # Only GPU images
             MATRIX_CMD="$MATRIX_CMD --image-type python-gpu"
           elif [ "${{ github.event.inputs.image_type }}" = "cpu" ]; then
+            # Only CPU images
             MATRIX_CMD="$MATRIX_CMD --image-type python"
           fi
+          # For "all", don't filter - generate matrix will include both python and python-gpu
+          
+          # Apply LTS count filter
           if [ -n "${{ github.event.inputs.lts_count }}" ] && [ "${{ github.event.inputs.all_lts }}" != "true" ]; then
             MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
           fi
+          
           MATRIX_JSON=$(eval $MATRIX_CMD)
           echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
 
@@ -194,16 +199,36 @@ jobs:
           cache-from: type=gha,scope=minimal
           cache-to: type=gha,mode=max,scope=minimal
 
-  # Build python image (depends on standard)
+  # Build python images using matrix (depends on standard or standard-gpu based on image type)
   build-python:
-    name: Build python
-    needs: [generate-dockerfiles, build-standard]
+    name: Build ${{ matrix.image_type }}-${{ matrix.runtime }}
+    needs: [generate-dockerfiles, build-standard, build-standard-gpu]
+    if: always() && needs.generate-dockerfiles.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-dockerfiles.outputs.matrix) }}
 
     steps:
+      - name: Check dependencies
+        id: check-deps
+        run: |
+          # Check if the required base image was built successfully
+          if [ "${{ matrix.image_type }}" = "python" ]; then
+            if [ "${{ needs.build-standard.result }}" != "success" ]; then
+              echo "Standard image build failed, skipping python build"
+              exit 1
+            fi
+          elif [ "${{ matrix.image_type }}" = "python-gpu" ]; then
+            if [ "${{ needs.build-standard-gpu.result }}" != "success" ]; then
+              echo "Standard-gpu image build failed, skipping python-gpu build"
+              exit 1
+            fi
+          fi
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -212,6 +237,17 @@ jobs:
         with:
           name: dockerfiles
           path: data/
+
+      - name: Determine runtime directory
+        id: runtime-dir
+        run: |
+          # Find the directory matching this runtime version
+          runtime_version="${{ matrix.runtime }}"
+          # Convert "17.3 LTS" to directory pattern like "17.3-LTS-*"
+          version_pattern=$(echo "$runtime_version" | sed 's/ /-/g')
+          runtime_dir=$(ls -1 "data/${{ matrix.image_type }}" | grep -E "^${version_pattern}" | head -1)
+          echo "Runtime directory: ${runtime_dir}"
+          echo "dir=${runtime_dir}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -224,20 +260,54 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract version tag
+        id: version
+        run: |
+          # Extract version number from runtime (e.g., "17.3 LTS" -> "17.3")
+          version=$(echo "${{ matrix.runtime }}" | sed 's/ LTS//g')
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          
+          # Determine if this is the latest LTS (first in matrix)
+          first_runtime=$(echo '${{ toJson(fromJson(needs.generate-dockerfiles.outputs.matrix).include) }}' | jq -r '.[0].runtime')
+          first_type=$(echo '${{ toJson(fromJson(needs.generate-dockerfiles.outputs.matrix).include) }}' | jq -r '.[0].image_type')
+          if [ "${{ matrix.runtime }}" = "$first_runtime" ] && [ "${{ matrix.image_type }}" = "$first_type" ]; then
+            echo "is_latest=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Prepare tags
+        id: tags
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ matrix.image_type }}-${{ steps.version.outputs.version }}"
+          
+          # Add unversioned tag only for the first runtime of each image type
+          # Check if this is the first occurrence of this image_type in the matrix
+          matrix_json='${{ toJson(fromJson(needs.generate-dockerfiles.outputs.matrix).include) }}'
+          first_of_type=$(echo "$matrix_json" | jq -r --arg type "${{ matrix.image_type }}" '[.[] | select(.image_type == $type)][0].runtime')
+          
+          if [ "${{ matrix.runtime }}" = "$first_of_type" ]; then
+            TAGS="$TAGS
+          ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ matrix.image_type }}"
+          fi
+          
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Build and push python image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: data/python/latest/Dockerfile
+          file: data/${{ matrix.image_type }}/${{ steps.runtime-dir.outputs.dir }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:python
+          tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha,scope=python
-          cache-to: type=gha,mode=max,scope=python
+          cache-from: type=gha,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image_type }}-${{ steps.version.outputs.version }}
 
   # Build standard image (depends on minimal)
   build-standard:
@@ -422,48 +492,3 @@ jobs:
           cache-from: type=gha,scope=standard-gpu
           cache-to: type=gha,mode=max,scope=standard-gpu
 
-  # Build python-gpu (depends on standard-gpu)
-  build-python-gpu:
-    name: Build python-gpu
-    needs: [generate-dockerfiles, build-standard-gpu]
-    if: github.event.inputs.image_type != 'cpu'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Download Dockerfiles
-        uses: actions/download-artifact@v5
-        with:
-          name: dockerfiles
-          path: data/
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push python-gpu image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: data/python-gpu/latest/Dockerfile
-          push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:python-gpu
-          labels: |
-            org.opencontainers.image.source=${{ github.event.repository.html_url }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
-          cache-from: type=gha,scope=python-gpu
-          cache-to: type=gha,mode=max,scope=python-gpu
