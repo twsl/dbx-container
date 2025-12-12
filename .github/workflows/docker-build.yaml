@@ -289,17 +289,8 @@ jobs:
       - name: Prepare tags
         id: tags
         run: |
+          # Always include the versioned tag
           TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ matrix.image_type }}-${{ steps.version.outputs.version }}"
-          
-          # Add unversioned tag only for the first runtime of each image type
-          # Check if this is the first occurrence of this image_type in the matrix
-          matrix_json='${{ toJson(fromJson(needs.generate-dockerfiles.outputs.matrix).include) }}'
-          first_of_type=$(echo "$matrix_json" | jq -r --arg type "${{ matrix.image_type }}" '[.[] | select(.image_type == $type)][0].runtime')
-          
-          if [ "${{ matrix.runtime }}" = "$first_of_type" ]; then
-            TAGS="$TAGS
-          ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:${{ matrix.image_type }}"
-          fi
           
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "$TAGS" >> $GITHUB_OUTPUT
