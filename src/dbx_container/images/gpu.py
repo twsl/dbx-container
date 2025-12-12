@@ -32,8 +32,7 @@ class GpuDockerfile(DockerfileBuilder):
         # Construct the official NVIDIA CUDA base image name
         # Format: cuda_version-cudnn-runtime-ubuntu_version
         # Example: 12.8.1-cudnn-runtime-ubuntu24.04
-        ubuntu_tag = ubuntu_version.replace(".", "")
-        base_image_name = f"nvidia/cuda:{cuda_version}-cudnn-runtime-ubuntu{ubuntu_tag}"
+        base_image_name = f"nvidia/cuda:{cuda_version}-cudnn-runtime-ubuntu{ubuntu_version}"
 
         # Instructions specific to the GPU image
         gpu_instructions = [
