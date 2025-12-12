@@ -135,8 +135,18 @@ jobs:
             MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
           fi
           
-          MATRIX_JSON=$(eval $MATRIX_CMD)
-          echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
+          # Capture output and suppress stderr warnings (SSL warnings, poetry messages, etc)
+          MATRIX_JSON=$(eval $MATRIX_CMD 2>&1 | grep -v "WARNING" | grep -v "⚠" | grep -v "Skipping virtualenv" | grep "^{")
+          
+          # Validate JSON before outputting
+          if echo "$MATRIX_JSON" | jq -e . >/dev/null 2>&1; then
+            echo "matrix=$(echo $MATRIX_JSON | jq -c .)" >> $GITHUB_OUTPUT
+            echo "Generated matrix with $(echo $MATRIX_JSON | jq '.include | length') entries"
+          else
+            echo "Error: Invalid JSON generated"
+            echo "$MATRIX_JSON"
+            exit 1
+          fi
 
       - name: Check for GPU images
         id: check-images

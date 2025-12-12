@@ -45,6 +45,14 @@ class RuntimeContainerEngine:
         self.force_ubuntu_version = force_ubuntu_version
         self.skip_ml_variants = skip_ml_variants
 
+        # Store workspace root for relative path calculations
+        # Find the project root by looking for pyproject.toml
+        self.workspace_root = Path.cwd()
+        for parent in [Path.cwd()] + list(Path.cwd().parents):
+            if (parent / "pyproject.toml").exists():
+                self.workspace_root = parent
+                break
+
         # Ensure data directory exists
         self.data_dir.mkdir(exist_ok=True)
 
@@ -910,7 +918,10 @@ class RuntimeContainerEngine:
                 len(files) for runtime_files in all_generated_files.values() for files in runtime_files.values()
             ),
             "build_details": {
-                runtime: {image_type: [str(path) for path in paths] for image_type, paths in runtime_files.items()}
+                runtime: {
+                    image_type: [str(path.absolute().relative_to(self.workspace_root)) for path in paths]
+                    for image_type, paths in runtime_files.items()
+                }
                 for runtime, runtime_files in all_generated_files.items()
             },
         }
