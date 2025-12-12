@@ -85,34 +85,34 @@ jobs:
       - name: Generate Dockerfiles
         run: |
           BUILD_CMD="poetry run dbx-container build --output-dir data"
-          
+
           # Runtime version filter
           if [ -n "${{ github.event.inputs.runtime_version }}" ]; then
             BUILD_CMD="$BUILD_CMD --runtime-version '${{ github.event.inputs.runtime_version }}'"
           fi
-          
+
           # LTS filtering
           if [ "${{ github.event.inputs.all_lts }}" = "true" ]; then
             BUILD_CMD="$BUILD_CMD --all-lts"
           elif [ -n "${{ github.event.inputs.lts_count }}" ]; then
             BUILD_CMD="$BUILD_CMD --lts-count ${{ github.event.inputs.lts_count }}"
           fi
-          
+
           # Image type filter
           if [ "${{ github.event.inputs.image_type }}" = "gpu" ]; then
             BUILD_CMD="$BUILD_CMD --image-type gpu"
           fi
-          
+
           # Ubuntu version
           if [ -n "${{ github.event.inputs.force_ubuntu_version }}" ]; then
             BUILD_CMD="$BUILD_CMD --force-ubuntu-version '${{ github.event.inputs.force_ubuntu_version }}'"
           fi
-          
+
           # ML variants
           if [ "${{ github.event.inputs.include_ml_variants }}" = "true" ]; then
             BUILD_CMD="$BUILD_CMD --include-ml-variants"
           fi
-          
+
           eval $BUILD_CMD
 
       - name: Generate build matrix
@@ -187,14 +187,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:minimal
-            dbx-runtime:minimal
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=minimal
           cache-to: type=gha,mode=max,scope=minimal
-          outputs: type=docker
 
   # Build python image (depends on standard)
   build-python:
@@ -234,14 +232,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:python
-            dbx-runtime:python
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=python
           cache-to: type=gha,mode=max,scope=python
-          outputs: type=docker
 
   # Build standard image (depends on minimal)
   build-standard:
@@ -281,14 +277,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard
-            dbx-runtime:standard
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=standard
           cache-to: type=gha,mode=max,scope=standard
-          outputs: type=docker
 
   # Build GPU base image
   build-gpu:
@@ -329,14 +323,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:gpu
-            dbx-runtime:gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu
-          outputs: type=docker
 
   # Build minimal-gpu (depends on gpu base)
   build-minimal-gpu:
@@ -377,14 +369,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:minimal-gpu
-            dbx-runtime:minimal-gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=minimal-gpu
           cache-to: type=gha,mode=max,scope=minimal-gpu
-          outputs: type=docker
 
   # Build standard-gpu (depends on minimal-gpu)
   build-standard-gpu:
@@ -425,14 +415,12 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:standard-gpu
-            dbx-runtime:standard-gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=standard-gpu
           cache-to: type=gha,mode=max,scope=standard-gpu
-          outputs: type=docker
 
   # Build python-gpu (depends on standard-gpu)
   build-python-gpu:
@@ -473,11 +461,9 @@ jobs:
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main') }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}:python-gpu
-            dbx-runtime:python-gpu
           labels: |
             org.opencontainers.image.source=${{ github.event.repository.html_url }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=python-gpu
           cache-to: type=gha,mode=max,scope=python-gpu
-          outputs: type=docker
