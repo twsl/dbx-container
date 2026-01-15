@@ -62,7 +62,7 @@ tomlkit==0.12.3
 typeguard==4.3.0
 typing_extensions==4.8.0
 ujson==5.8.0
-urllib3==2.6.0
+urllib3==2.6.3
 whatthepatch==1.0.5
 wheel==0.43.0
 yapf==0.40.2
