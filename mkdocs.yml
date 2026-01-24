@@ -6,11 +6,6 @@ copyright: Copyright &copy; 2025 twsl
 
 nav:
   - Home: index.md
-  - Guides:
-      - Docker Build: docker-build.md
-      - Docker Compose: docker-compose.md
-      - CI/CD Pipeline: ci-cd.md
-      - OS Version Handling: os-version-handling.md
   - API: $api/dbx_container.***
   - Examples: notebooks/index.md
 
@@ -120,4 +115,4 @@ markdown_extensions:
       custom_checkbox: true
   - pymdownx.tilde
   - pymdownx.snippets:
-      base_path: !relative $config_dir/../ # Relative to the root directory ($config_dir is where mkdocs.yml is located)
+      base_path: !relative $config_dir/ # Relative to the root directory ($config_dir is where mkdocs.yml is located)

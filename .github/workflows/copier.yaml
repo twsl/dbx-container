@@ -11,6 +11,7 @@ concurrency:
 
 env:
   python-version: "3.11"
+  UV_DYNAMIC_VERSIONING_BYPASS: "1.0.0"
 
 jobs:
   copier-update:
@@ -31,30 +32,25 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
         with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          virtualenvs-path: .venv
-
-      - name: Add poetry to path
-        run: echo "$(poetry env info --path)/bin" >> $GITHUB_PATH
-
-      - name: Set up cache
-        uses: actions/cache@v5
-        id: cached-poetry-dependencies
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ env.python-version }}-${{ hashFiles('poetry.lock') }}
-          restore-keys: venv-${{ runner.os }}-${{ env.python-version }}-
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
 
       - name: Install dependencies
-        run: poetry install --no-interaction --all-extras
+        run: uv sync --all-groups --all-extras --frozen
+
+      - name: Build dependencies
+        run: uv build
+
+      - name: Git Status
+        id: git-status
+        run: git status
 
       - name: Run copier update
         id: run-update
-        run: poetry run copier update --trust -A --vcs-ref=HEAD
+        run: uv run copier update --trust -A --vcs-ref=HEAD
 
       - name: Resolve conflicts with incoming changes
         run: |
@@ -81,8 +77,8 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run poetry lock
-        run: poetry lock
+      - name: Run uv lock
+        run: uv lock
 
       - name: Extract commit from copier answers
         id: copier-commit
