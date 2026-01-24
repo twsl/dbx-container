@@ -110,8 +110,8 @@ class PythonDockerfile(DockerfileBuilder):
                     "https://docs.databricks.com/en/release-notes/runtime/15.4lts.html#system-environment"
                 )
             ),
-            RunInstruction(command="apt-get install -y libpq-dev build-essential"),
             CopyInstruction(src=requirements_path, dest="/databricks/requirements.txt"),
+            RunInstruction(command="apt-get install -y libpq-dev build-essential"),
             RunInstruction(command="/databricks/python3/bin/pip install --no-deps -r /databricks/requirements.txt"),
             CommentInstruction(comment="Specifies where Spark will look for the python process"),
             EnvInstruction(name="PYSPARK_PYTHON", value="/databricks/python3/bin/python3"),
