@@ -38,7 +38,7 @@ pathspec==0.12.1
 pip==25.3
 platformdirs==4.0.0
 pluggy==1.3.0
-pyasn1==0.6.1
+pyasn1==0.6.2
 pyasn1_modules==0.4.2
 pycodestyle==2.11.1
 pydocstyle==6.3.0
@@ -62,7 +62,7 @@ tomlkit==0.12.3
 typeguard==4.3.0
 typing_extensions==4.8.0
 ujson==5.8.0
-urllib3==2.6.0
+urllib3==2.6.3
 whatthepatch==1.0.5
-wheel==0.43.0
+wheel==0.46.2
 yapf==0.40.2
