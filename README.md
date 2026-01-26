@@ -46,19 +46,19 @@ uv add dbx-container
 Generate Dockerfiles for all Databricks runtimes:
 
 ```bash
-poetry run dbx-container build
+uv run dbx-container build
 ```
 
 Generate for a specific runtime:
 
 ```bash
-poetry run dbx-container build --runtime-version "15.4 LTS"
+uv run dbx-container build --runtime-version "15.4 LTS"
 ```
 
 Generate for a specific image type:
 
 ```bash
-poetry run dbx-container build --image-type gpu
+uv run dbx-container build --image-type gpu
 ```
 
 ### List Available Runtimes
@@ -66,7 +66,7 @@ poetry run dbx-container build --image-type gpu
 View all supported Databricks runtime versions:
 
 ```bash
-poetry run dbx-container list
+uv run dbx-container list
 ```
 
 ### Build Docker Images

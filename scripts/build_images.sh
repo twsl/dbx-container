@@ -75,7 +75,7 @@ log_error() {
 # Generate Dockerfiles
 log_info "Generating Dockerfiles..."
 
-BUILD_CMD="poetry run dbx-container build --output-dir data"
+BUILD_CMD="uv run dbx-container build --output-dir data"
 
 if [ -n "$RUNTIME_VERSION" ]; then
     BUILD_CMD="$BUILD_CMD --runtime-version '$RUNTIME_VERSION'"

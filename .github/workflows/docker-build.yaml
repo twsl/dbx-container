@@ -89,7 +89,7 @@ jobs:
 
       - name: Generate Dockerfiles
         run: |
-          BUILD_CMD="poetry run dbx-container build --output-dir data --registry '${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}'"
+          BUILD_CMD="uv run dbx-container build --output-dir data --registry '${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}'"
 
           # Runtime version filter
           if [ -n "${{ github.event.inputs.runtime_version }}" ]; then
@@ -123,7 +123,7 @@ jobs:
       - name: Generate build matrix
         id: set-matrix
         run: |
-          MATRIX_CMD="poetry run dbx-container generate-matrix --only-lts"
+          MATRIX_CMD="uv run dbx-container generate-matrix --only-lts"
 
           # Configure image types for the matrix
           if [ "${{ github.event.inputs.image_type }}" = "gpu" ]; then
@@ -140,7 +140,7 @@ jobs:
             MATRIX_CMD="$MATRIX_CMD --latest-lts-count ${{ github.event.inputs.lts_count }}"
           fi
 
-          # Capture output and suppress stderr warnings (SSL warnings, poetry messages, etc)
+          # Capture output and suppress stderr warnings (SSL warnings, uv messages, etc)
           MATRIX_JSON=$(eval $MATRIX_CMD 2>&1 | grep -v "WARNING" | grep -v "⚠" | grep -v "Skipping virtualenv" | grep "^{")
 
           # Validate JSON before outputting

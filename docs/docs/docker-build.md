@@ -13,20 +13,17 @@ The project provides two parallel dependency chains:
 **Standard Chain** (Ubuntu-based):
 
 1. **minimal** - Minimal Ubuntu 24.04 container with Java
-
    - Base Ubuntu with essential tools
    - Azul Zulu JDK 8 and 17
    - Tag format: `dbx-runtime:minimal`
 
 2. **standard** - Standard container with FUSE and SSH server support
-
    - Extends minimal image
    - FUSE filesystem support
    - SSH server for remote access
    - Tag format: `dbx-runtime:standard`
 
 3. **python** - Python-enabled container with virtualenv support
-
    - Extends standard image
    - Python installation with pip, setuptools, wheel
    - virtualenv for isolated environments
@@ -37,26 +34,22 @@ The project provides two parallel dependency chains:
 **GPU Chain** (NVIDIA CUDA-based):
 
 1. **gpu** - Base GPU-enabled container
-
    - Based directly on NVIDIA CUDA images
    - Includes R support for driver setup
    - Tag format: `dbx-runtime:gpu`
 
 2. **minimal-gpu** - GPU-enabled minimal container
-
    - Extends gpu image
    - Includes Java support (JDK 8 and 17)
    - Tag format: `dbx-runtime:minimal-gpu`
 
 3. **standard-gpu** - GPU standard container with FUSE and SSH
-
    - Extends minimal-gpu
    - FUSE filesystem support
    - SSH server for remote access
    - Tag format: `dbx-runtime:standard-gpu`
 
 4. **python-gpu** - GPU Python container
-
    - Extends standard-gpu
    - CUDA-enabled Python environment
    - Runtime metadata labels
@@ -78,19 +71,19 @@ For runtime-specific images (python and python-gpu), the following variations ar
 Generate Dockerfiles for all runtimes:
 
 ```bash
-poetry run dbx-container build --output-dir data
+uv run dbx-container build --output-dir data
 ```
 
 Generate for a specific runtime:
 
 ```bash
-poetry run dbx-container build --runtime-version "15.4 LTS" --output-dir data
+uv run dbx-container build --runtime-version "15.4 LTS" --output-dir data
 ```
 
 Generate for a specific image type:
 
 ```bash
-poetry run dbx-container build --image-type gpu --output-dir data
+uv run dbx-container build --image-type gpu --output-dir data
 ```
 
 ### Directory Structure
@@ -327,7 +320,7 @@ Or use the `--no-cache` flag:
 ### Testing Changes
 
 1. Modify Dockerfile templates in `src/dbx_container/images/`
-2. Regenerate Dockerfiles: `poetry run dbx-container build`
+2. Regenerate Dockerfiles: `uv run dbx-container build`
 3. Test build locally: `./scripts/build_images.sh --runtime "15.4 LTS" --image-type python`
 4. Verify the container works: `docker run -it <image-name> bash`
 
@@ -343,7 +336,7 @@ Or use the `--no-cache` flag:
 Runtime information is automatically scraped from Databricks documentation. To update:
 
 ```bash
-poetry run dbx-container list --fetch
+uv run dbx-container list --fetch
 ```
 
 This will fetch the latest runtime information and regenerate the Dockerfiles.

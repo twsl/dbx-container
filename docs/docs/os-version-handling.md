@@ -34,10 +34,10 @@ You can explicitly specify which Ubuntu version to use for all base images:
 
 ```bash
 # Use Ubuntu 22.04 for all base images
-poetry run dbx-container build --force-ubuntu-version "22.04"
+uv run dbx-container build --force-ubuntu-version "22.04"
 
 # Use Ubuntu 20.04 for all base images
-poetry run dbx-container build --force-ubuntu-version "20.04"
+uv run dbx-container build --force-ubuntu-version "20.04"
 ```
 
 When explicitly configured, you'll see:
@@ -101,7 +101,7 @@ python (or python-gpu)
 
 ```bash
 # Automatically upgrades to Ubuntu 24.04
-poetry run dbx-container build
+uv run dbx-container build
 ```
 
 Output:
@@ -116,7 +116,7 @@ INFO ✓ Generated 2/2 image types successfully
 
 ```bash
 # Use Ubuntu 22.04 throughout
-poetry run dbx-container build --force-ubuntu-version "22.04"
+uv run dbx-container build --force-ubuntu-version "22.04"
 ```
 
 Output:
@@ -132,7 +132,7 @@ INFO ✓ Generated 2/2 image types successfully
 
 ```bash
 # Build only 15.4 LTS with Ubuntu 22.04
-poetry run dbx-container build --runtime-version "15.4 LTS" --force-ubuntu-version "22.04"
+uv run dbx-container build --runtime-version "15.4 LTS" --force-ubuntu-version "22.04"
 ```
 
 ## Benefits

@@ -15,7 +15,7 @@ This guide explains how to use Docker Compose to run Databricks runtime containe
 First, generate the Dockerfiles for all runtimes:
 
 ```bash
-poetry run dbx-container build --output-dir data
+uv run dbx-container build --output-dir data
 ```
 
 ### 2. Start a Container

@@ -71,7 +71,7 @@ tests/
 *.ipynb
 .pre-commit-config.yaml
 pyproject.toml
-poetry.lock
+uv.lock
 LICENSE
 SECURITY.md
 CODE_OF_CONDUCT.md

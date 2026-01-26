@@ -39,7 +39,7 @@ Use GitHub's workflow dispatch feature with these options:
 **Steps**:
 
 - Checkout code
-- Set up Python and Poetry
+- Set up Python and uv
 - Install dependencies
 - Run `dbx-container build`
 - Generate build matrix JSON
@@ -285,7 +285,7 @@ Before pushing changes that affect the CI:
 
 ```bash
 # Generate Dockerfiles
-poetry run dbx-container build
+uv run dbx-container build
 
 # Test matrix generation
 python scripts/generate_build_matrix.py \
