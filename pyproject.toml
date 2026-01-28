@@ -47,7 +47,7 @@ default-groups = "all"
 [dependency-groups]
 dev = [
     "ruff>=0.14.14",
-    "ty>=0.0.13",
+    "ty>=0.0.14",
     "bandit>=1.9.3",
     "prek>=0.3.0",
     "vulture>=2.14",
@@ -69,7 +69,7 @@ test = [
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.7.1",
-    "mkdocs-git-revision-date-localized-plugin>=1.5.0",
+    "mkdocs-git-revision-date-localized-plugin>=1.5.1",
     "mkdocs-awesome-nav>=3.3.0",
     "mkdocs-git-authors-plugin>=0.10.0",
     "mkapi>=4.5.0",
@@ -109,6 +109,7 @@ vcs = "git"
 style = "semver"
 pattern = "default-unprefixed"
 fallback-version = "1.0.0"
+format = "{base}+{distance}.{commit}"
 
 [tool.hatch.build.hooks.version]
 path = "src/dbx_container/__about__.py"
