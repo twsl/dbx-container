@@ -52,7 +52,7 @@ def setup_build_command(subparsers) -> None:
     parser.add_argument(
         "--latest-lts-only",
         action="store_true",
-        help="Build only the latest 3 LTS versions (default behavior)",
+        help="Build only the latest LTS version (default behavior)",
     )
     parser.add_argument(
         "--all-lts",
@@ -62,8 +62,8 @@ def setup_build_command(subparsers) -> None:
     parser.add_argument(
         "--lts-count",
         type=int,
-        default=2,
-        help="Number of latest LTS versions to build when --latest-lts-only is used (default: 2)",
+        default=1,
+        help="Number of latest LTS versions to build when --latest-lts-only is used (default: 1)",
     )
     parser.add_argument(
         "--force-ubuntu-version",
