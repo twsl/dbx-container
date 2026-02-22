@@ -24,15 +24,15 @@ on:
           - gpu
         default: all
       all_lts:
-        description: 'Build all LTS versions (default: latest 2 LTS only)'
+        description: 'Build all LTS versions (default: latest 1 LTS only)'
         required: false
         type: boolean
         default: false
       lts_count:
-        description: 'Number of latest LTS versions to build (default: 2)'
+        description: 'Number of latest LTS versions to build (default: 1)'
         required: false
         type: number
-        default: 2
+        default: 1
       force_ubuntu_version:
         description: 'Force specific Ubuntu version for base images (e.g., "22.04" or "24.04")'
         required: false
