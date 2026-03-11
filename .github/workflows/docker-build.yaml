@@ -190,7 +190,7 @@ jobs:
           path: data/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
@@ -270,7 +270,7 @@ jobs:
           echo "dir=${runtime_dir}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
@@ -345,7 +345,7 @@ jobs:
           path: data/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
@@ -395,7 +395,7 @@ jobs:
           path: data/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
@@ -445,7 +445,7 @@ jobs:
           path: data/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
@@ -495,7 +495,7 @@ jobs:
           path: data/
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request' && (github.event.inputs.push_images == 'true' || github.ref == 'refs/heads/main')
